@@ -1,7 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
-<shape xmlns:android="http://schemas.android.com/apk/res/android"
-    android:shape="rectangle">
-    <solid android:color="#F21B1F24" />
-    <corners android:radius="14dp" />
-    <stroke android:width="1dp" android:color="#332BC4A0" />
-</shape>
+<!--
+  判定卡片 —— iOS Liquid Glass 材质（纯分层实现，不依赖系统模糊）。
+
+  为什么不用 FLAG_BLUR_BEHIND：它在 HyperOS 上的作用范围不稳定，同样的窗口参数
+  有时只糊卡片背后、有时糊满全屏，把聊天界面一起糊掉。所以玻璃感全部由这一层出：
+
+    1) 高不透明度的白底   —— 保证判定文字在任何背景上都读得清
+    2) 顶部向下衰减的白渐变 —— 受光面，iOS 玻璃的纵深感
+    3) 底部极淡的冷灰     —— 免得整块死白
+    4) 上半圈更亮的白描边 —— 折射边
+
+  半透明度定在 96%：再透一点就会和背后的聊天文字糊在一起。
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#F5FFFFFF" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="270"
+                android:startColor="#3DFFFFFF"
+                android:centerColor="#14FFFFFF"
+                android:endColor="#00FFFFFF"
+                android:type="linear" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <gradient
+                android:angle="90"
+                android:startColor="#0F8E8E93"
+                android:endColor="#008E8E93"
+                android:type="linear" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+
+    <item>
+        <shape android:shape="rectangle">
+            <stroke android:width="0.5dp" android:color="#99FFFFFF" />
+            <corners android:radius="26dp" />
+        </shape>
+    </item>
+</layer-list>

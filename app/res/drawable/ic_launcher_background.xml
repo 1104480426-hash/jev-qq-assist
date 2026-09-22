@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标的底板：深青玻璃，上亮下深，和图标里的玻璃球同色系 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <gradient
+        android:angle="270"
+        android:startColor="#FF1A4A42"
+        android:centerColor="#FF10322D"
+        android:endColor="#FF071311"
+        android:type="linear" />
+</shape>

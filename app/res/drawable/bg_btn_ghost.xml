@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  iOS 次级按钮：就是 iOS 那个「填充按钮」的样子 ——
+  强调色的 12% 透明填充 + 强调色文字，没有边框。
+-->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="#1F2BC4A0" />
+    <corners android:radius="14dp" />
+</shape>

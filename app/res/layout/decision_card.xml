@@ -1,13 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 判定卡片内容。文字色按浅色毛玻璃底配，层次照 iOS 的 label / secondaryLabel 来。 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:background="@drawable/bg_card"
     android:orientation="vertical"
-    android:paddingLeft="13dp"
-    android:paddingRight="13dp"
-    android:paddingTop="11dp"
-    android:paddingBottom="9dp">
+    android:paddingLeft="16dp"
+    android:paddingRight="16dp"
+    android:paddingTop="13dp"
+    android:paddingBottom="11dp">
 
     <LinearLayout
         android:id="@+id/card_header"
@@ -23,9 +24,10 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
+            android:letterSpacing="0.01"
             android:text="建议：—"
-            android:textColor="#FF2BC4A0"
-            android:textSize="14sp"
+            android:textColor="#FF0E8C74"
+            android:textSize="15sp"
             android:textStyle="bold" />
 
         <TextView
@@ -33,70 +35,76 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:paddingLeft="8dp"
-            android:paddingRight="2dp"
+            android:paddingRight="0dp"
             android:text="⠿"
-            android:textColor="#FF5F6A72"
-            android:textSize="14sp" />
+            android:textColor="#FFC7C7CC"
+            android:textSize="15sp" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/card_body"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="7dp"
-        android:lineSpacingExtra="2dp"
+        android:layout_marginTop="9dp"
+        android:lineSpacingExtra="3dp"
         android:text=""
-        android:textColor="#FFE6E9EC"
-        android:textSize="12.5sp" />
+        android:textColor="#FF1C1C1E"
+        android:textSize="13.5sp" />
 
     <TextView
         android:id="@+id/card_meta"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
+        android:layout_marginTop="9dp"
         android:text=""
-        android:textColor="#FF8A939B"
-        android:textSize="10sp" />
+        android:textColor="#FF8E8E93"
+        android:textSize="11sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="9dp"
+        android:layout_marginTop="11dp"
         android:orientation="horizontal">
 
         <Button
             android:id="@+id/card_again"
             android:layout_width="0dp"
-            android:layout_height="36dp"
+            android:layout_height="38dp"
             android:layout_weight="1"
-            android:background="#222BC4A0"
+            android:background="@drawable/bg_btn_primary"
+            android:letterSpacing="0.02"
             android:text="重判"
             android:textAllCaps="false"
-            android:textColor="#FF2BC4A0"
-            android:textSize="12sp" />
+            android:textColor="#FFFFFFFF"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/card_copy"
             android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_marginLeft="6dp"
+            android:layout_height="38dp"
+            android:layout_marginLeft="8dp"
             android:layout_weight="1"
-            android:background="#22FFFFFF"
+            android:background="@drawable/bg_btn_ghost"
+            android:letterSpacing="0.02"
             android:text="复制"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC"
-            android:textSize="12sp" />
+            android:textColor="#FF0E8C74"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/card_close"
             android:layout_width="0dp"
-            android:layout_height="36dp"
-            android:layout_marginLeft="6dp"
+            android:layout_height="38dp"
+            android:layout_marginLeft="8dp"
             android:layout_weight="1"
-            android:background="#22FFFFFF"
+            android:background="@drawable/bg_btn_ghost"
+            android:letterSpacing="0.02"
             android:text="收起"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC"
-            android:textSize="12sp" />
+            android:textColor="#FF0E8C74"
+            android:textSize="13sp"
+            android:textStyle="bold" />
     </LinearLayout>
 </LinearLayout>

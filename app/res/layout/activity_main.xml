@@ -2,7 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#FF12141A"
+    android:background="#FFF2F2F7"
     android:fillViewport="true">
 
     <LinearLayout
@@ -15,7 +15,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Jev 聊天参谋"
-            android:textColor="#FF2BC4A0"
+            android:textColor="#FF0E8C74"
             android:textSize="22sp"
             android:textStyle="bold" />
 
@@ -25,7 +25,7 @@
             android:layout_marginTop="6dp"
             android:lineSpacingExtra="3dp"
             android:text="Jev 不生成回复文本，只给类型化判定：是否在等你回、对方意图、情绪强度、说错话风险、该用哪种策略。决定权在你手里。"
-            android:textColor="#FF9AA3AC"
+            android:textColor="#FF8E8E93"
             android:textSize="12sp" />
 
         <TextView
@@ -33,11 +33,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:lineSpacingExtra="4dp"
             android:padding="12dp"
             android:text=""
-            android:textColor="#FFE6E9EC"
+            android:textColor="#FF1C1C1E"
             android:textSize="12sp" />
 
         <TextView
@@ -45,19 +45,19 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="18dp"
             android:text="判定端点"
-            android:textColor="#FFE6E9EC"
+            android:textColor="#FF1C1C1E"
             android:textSize="13sp" />
 
         <EditText
             android:id="@+id/endpoint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:hint="http://192.168.31.217:8890/v1/systemone"
             android:inputType="textUri"
             android:padding="10dp"
-            android:textColor="#FFE6E9EC"
-            android:textColorHint="#FF5A626A"
+            android:textColor="#FF1C1C1E"
+            android:textColorHint="#FFC7C7CC"
             android:textSize="12sp" />
 
         <TextView
@@ -65,19 +65,19 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="模型名"
-            android:textColor="#FFE6E9EC"
+            android:textColor="#FF1C1C1E"
             android:textSize="13sp" />
 
         <EditText
             android:id="@+id/model"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:hint="jev-latest"
             android:inputType="text"
             android:padding="10dp"
-            android:textColor="#FFE6E9EC"
-            android:textColorHint="#FF5A626A"
+            android:textColor="#FF1C1C1E"
+            android:textColorHint="#FFC7C7CC"
             android:textSize="12sp" />
 
         <TextView
@@ -85,19 +85,19 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="API Key（本地服务留空即可）"
-            android:textColor="#FFE6E9EC"
+            android:textColor="#FF1C1C1E"
             android:textSize="13sp" />
 
         <EditText
             android:id="@+id/apikey"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:hint="可留空"
             android:inputType="text"
             android:padding="10dp"
-            android:textColor="#FFE6E9EC"
-            android:textColorHint="#FF5A626A"
+            android:textColor="#FF1C1C1E"
+            android:textColorHint="#FFC7C7CC"
             android:textSize="12sp" />
 
         <TextView
@@ -105,19 +105,19 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="上下文行数"
-            android:textColor="#FFE6E9EC"
+            android:textColor="#FF1C1C1E"
             android:textSize="13sp" />
 
         <EditText
             android:id="@+id/lines"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:hint="12"
             android:inputType="number"
             android:padding="10dp"
-            android:textColor="#FFE6E9EC"
-            android:textColorHint="#FF5A626A"
+            android:textColor="#FF1C1C1E"
+            android:textColorHint="#FFC7C7CC"
             android:textSize="12sp" />
 
         <Button
@@ -125,7 +125,7 @@
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="16dp"
-            android:background="#FF2BC4A0"
+            android:background="@drawable/bg_btn_primary"
             android:text="保存"
             android:textAllCaps="false"
             android:textColor="#FF0B1412"
@@ -136,71 +136,71 @@
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#FF232830"
+            android:background="@drawable/bg_btn_ghost"
             android:text="测试判定"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC" />
+            android:textColor="#FF1C1C1E" />
 
         <Button
             android:id="@+id/demo"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#222BC4A0"
+            android:background="@drawable/bg_btn_primary"
             android:text="查看演示模式（虚构对话）"
             android:textAllCaps="false"
-            android:textColor="#FF2BC4A0" />
+            android:textColor="#FFFFFFFF" />
 
         <Button
             android:id="@+id/mode"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#FF232830"
+            android:background="@drawable/bg_btn_ghost"
             android:text="切换判定模式（本地）"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC" />
+            android:textColor="#FF1C1C1E" />
 
         <Button
             android:id="@+id/localcheck"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#FF232830"
+            android:background="@drawable/bg_btn_ghost"
             android:text="加载本地模型并自检"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC" />
+            android:textColor="#FF1C1C1E" />
 
         <Button
             android:id="@+id/accessibility"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#FF232830"
+            android:background="@drawable/bg_btn_ghost"
             android:text="开启读屏无障碍"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC" />
+            android:textColor="#FF1C1C1E" />
 
         <Button
             android:id="@+id/toggle"
             android:layout_width="match_parent"
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
-            android:background="#FF232830"
+            android:background="@drawable/bg_btn_ghost"
             android:text="启动悬浮球"
             android:textAllCaps="false"
-            android:textColor="#FFE6E9EC" />
+            android:textColor="#FF1C1C1E" />
 
         <TextView
             android:id="@+id/output"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="16dp"
-            android:background="#FF1B1F24"
+            android:background="@drawable/bg_card"
             android:lineSpacingExtra="4dp"
             android:padding="12dp"
             android:text=""
-            android:textColor="#FF9AA3AC"
+            android:textColor="#FF8E8E93"
             android:textSize="11sp" />
     </LinearLayout>
 </ScrollView>

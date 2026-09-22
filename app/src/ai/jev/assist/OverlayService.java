@@ -69,6 +69,11 @@ public class OverlayService extends Service {
     private String cardHeadline = "";
     private String cardBody = "";
 
+    /** 判定期间用户主动收起了卡片：迟到的结果不该再弹回来。 */
+    private boolean dismissed = false;
+    /** 请求序号，避免旧请求的结果盖掉新请求的。 */
+    private int requestSeq = 0;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -297,6 +302,15 @@ public class OverlayService extends Service {
     // ---- 判定 ----
 
     private void onBallTap() {
+        // 卡片开着就收起。因为不能开 FLAG_WATCH_OUTSIDE_TOUCH（会让模糊铺满全屏），
+        // 就用同一个球来切换显示状态，和 iOS 的辅助触控一个逻辑。
+        if (cardView != null) {
+            dismissed = true;
+            removeCard();
+            return;
+        }
+        dismissed = false;
+
         String transcript = ChatAccessibilityService.cachedTranscript();
         if (transcript.length() == 0) {
             showCard("还没抓到聊天内容",
@@ -317,6 +331,7 @@ public class OverlayService extends Service {
         final String endpoint = Prefs.endpoint(this);
         final String model = Prefs.model(this);
         final String key = Prefs.apiKey(this);
+        final int seq = ++requestSeq;
 
         new Thread(new Runnable() {
             @Override
@@ -337,6 +352,9 @@ public class OverlayService extends Service {
                             ui.post(new Runnable() {
                                 @Override
                                 public void run() {
+                                    if (seq != requestSeq || dismissed) {
+                                        return;
+                                    }
                                     showCard("判定失败", err, "端点 " + endpoint, false);
                                 }
                             });
@@ -348,6 +366,10 @@ public class OverlayService extends Service {
                     ui.post(new Runnable() {
                         @Override
                         public void run() {
+                            // 用户中途收起了卡片，就别再弹回来
+                            if (seq != requestSeq || dismissed) {
+                                return;
+                            }
                             showCard(DecisionSpec.headline(answers),
                                     DecisionSpec.renderAll(answers), meta, true);
                         }
@@ -356,6 +378,9 @@ public class OverlayService extends Service {
                     ui.post(new Runnable() {
                         @Override
                         public void run() {
+                            if (seq != requestSeq || dismissed) {
+                                return;
+                            }
                             showCard("本地判定失败", String.valueOf(e.getMessage()),
                                     "本地模型未能加载，可在设置里看具体原因。", false);
                         }
@@ -385,12 +410,15 @@ public class OverlayService extends Service {
 
         // 固定宽度；高度交给 AT_MOST 测量，卡片本身是 LinearLayout，能正确撑开。
         int cardWidth = (int) (280 * density);
+        // 这里刻意不用 FLAG_BLUR_BEHIND。实测在 HyperOS 上它的作用范围不稳定：
+        // 同样的窗口参数（局部 735x601、blurBehindRadius=47），有时只糊卡片背后，
+        // 有时把整个屏幕都糊掉，聊天界面就读不了了。一个会偶发毁掉主场景的效果不值当，
+        // 所以玻璃质感全部由 bg_card 的分层来出。相关排查留在 commit 记录里。
         cardParams = new WindowManager.LayoutParams(
                 cardWidth,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
         cardParams.gravity = Gravity.TOP | Gravity.START;
 
@@ -401,18 +429,6 @@ public class OverlayService extends Service {
 
         View header = cardView.findViewById(R.id.card_header);
         header.setOnTouchListener(new CardDragListener(cardWidth));
-
-        // 点卡片外面就收起，不用专门去够那个按钮
-        cardView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE) {
-                    removeCard();
-                    return true;
-                }
-                return false;
-            }
-        });
 
         cardView.findViewById(R.id.card_close).setOnClickListener(new View.OnClickListener() {
             @Override
