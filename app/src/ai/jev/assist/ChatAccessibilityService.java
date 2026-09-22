@@ -54,6 +54,31 @@ public class ChatAccessibilityService extends AccessibilityService {
         return lastStats;
     }
 
+    /**
+     * 点悬浮球那一下抓到的内容。
+     *
+     * <p>被动事件永不写这三个字段。原因：用户点完球、看完判定，要切回设置页看"刚才到底读了什么"，
+     * 而这一路上会经过桌面——桌面在屏幕上停留超过 {@link #THROTTLE_MS}，被动事件就把缓存
+     * 改写成桌面了，设置页于是展示应用图标名而不是那段对话。展示"最近一次判定用的输入"
+     * 必须有一份不受路过窗口影响的快照。
+     */
+    private static volatile String pinnedTranscript = "";
+    private static volatile String pinnedPkg = "";
+    private static volatile long pinnedAt = 0L;
+    private static volatile String pinnedStats = "";
+
+    public static String pinnedTranscript() {
+        return pinnedTranscript;
+    }
+
+    public static String pinnedStats() {
+        return pinnedStats;
+    }
+
+    public static long pinnedAt() {
+        return pinnedAt;
+    }
+
     private static final long THROTTLE_MS = 250L;
     private static final int MAX_NODES = 4000;
     private static final String TAG = "JevWingman";
@@ -129,6 +154,12 @@ public class ChatAccessibilityService extends AccessibilityService {
             cachedTranscript = fresh;
             lastCapturePkg = s.pendingPkg;
             lastCaptureAt = System.currentTimeMillis();
+
+            // 同一份内容钉住。设置页展示的是这一次，不是"最近任何窗口"。
+            pinnedTranscript = fresh;
+            pinnedPkg = s.pendingPkg;
+            pinnedAt = lastCaptureAt;
+            pinnedStats = lastStats;
         }
         return fresh;
     }
@@ -215,7 +246,15 @@ public class ChatAccessibilityService extends AccessibilityService {
      * "刚才那一下读的是哪个窗口"，好让他确认方向对不对。
      */
     public static String captureSourceName() {
-        String pkg = lastCapturePkg;
+        return appNameOf(lastCapturePkg);
+    }
+
+    /** 点球那一次读的是哪个 App。 */
+    public static String pinnedSourceName() {
+        return appNameOf(pinnedPkg);
+    }
+
+    private static String appNameOf(String pkg) {
         if (pkg == null || pkg.length() == 0) {
             return "";
         }

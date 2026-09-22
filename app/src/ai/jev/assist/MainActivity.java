@@ -191,22 +191,37 @@ public class MainActivity extends Activity {
             sb.append('\n').append("本地模型：未加载（首次判定时自动加载）");
         }
 
-        String captured = ChatAccessibilityService.cachedTranscript();
+        // 优先展示点球那一次读了什么。被动缓存会被路上经过的窗口改写——用户从聊天窗口
+        // 切回这里，中途经过桌面，缓存就变成应用图标名了，那不是他要看的东西。
+        String pinned = ChatAccessibilityService.pinnedTranscript();
+        boolean fromBall = pinned.length() > 0;
+        String captured = fromBall ? pinned : ChatAccessibilityService.cachedTranscript();
+        String src = fromBall
+                ? ChatAccessibilityService.pinnedSourceName()
+                : ChatAccessibilityService.captureSourceName();
+        String stats = fromBall
+                ? ChatAccessibilityService.pinnedStats()
+                : ChatAccessibilityService.lastStats();
+
         if (captured.length() > 0) {
-            String src = ChatAccessibilityService.captureSourceName();
-            sb.append('\n').append("最近读自：");
+            sb.append('\n').append(fromBall ? "上次判定读到：" : "最近读自：");
             if (src.length() > 0) {
                 sb.append(src).append(" · ");
             }
             sb.append(captured.length()).append(" 字");
+            if (fromBall) {
+                String ago = ago(ChatAccessibilityService.pinnedAt());
+                if (ago.length() > 0) {
+                    sb.append(" · ").append(ago);
+                }
+            }
         } else {
-            sb.append('\n').append("最近抓取：暂无（切到聊天窗口停一下再回来）");
+            sb.append('\n').append("上次判定：暂无（去聊天窗口点一下悬浮球）");
         }
 
         // 把实际抓到的文字摊出来。判定不对时，先看这里：是读错了窗口，
         // 还是说话人认反了，一眼能分清，不用去猜。
         if (captured.length() > 0) {
-            String stats = ChatAccessibilityService.lastStats();
             if (stats.length() > 0) {
                 sb.append('\n').append(stats);
             }
@@ -218,6 +233,24 @@ public class MainActivity extends Activity {
         toggleButton.setText(OverlayService.running ? "停止悬浮球" : "启动悬浮球");
         modeButton.setText("切换判定模式（当前："
                 + (Prefs.isLocal(this) ? "本地" : "远端") + "）");
+    }
+
+    /** 把时间戳讲成人话，让"上次判定读到"带上新鲜度。 */
+    private static String ago(long at) {
+        if (at <= 0L) {
+            return "";
+        }
+        long sec = (System.currentTimeMillis() - at) / 1000L;
+        if (sec < 60) {
+            return "刚刚";
+        }
+        if (sec < 3600) {
+            return (sec / 60) + " 分钟前";
+        }
+        if (sec < 86400) {
+            return (sec / 3600) + " 小时前";
+        }
+        return (sec / 86400) + " 天前";
     }
 
     /**
