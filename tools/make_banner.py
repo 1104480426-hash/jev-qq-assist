@@ -94,20 +94,20 @@ def main():
     d.text((80, 236), body[0], font=font(21, bold=False), fill=MUTED)
     d.text((80, 268), body[1], font=font(21, bold=False), fill=MUTED)
 
-    a = "它只给判决，不生成回复文本，也从不代发消息。"
+    a = "判定可以跑在手机里的本地模型上，也可以接云端 Jev 兼容端点。"
     d.text((80, 312), a, font=font(21, bold=False), fill=MUTED)
 
-    # 三个卖点做成胶囊
-    chips = ["本地推理 · 离线可用", "单次判定 49ms", "不代发消息"]
+    # 卖点做成胶囊：双模式放在第一位，这是这个项目最想讲的一件事
+    chips = ["本地离线 / 云端 API", "单次判定 49ms", "只给判决，不代发消息"]
     x = 80
     for c in chips:
-        f = font(17, bold=False)
+        f = font(16, bold=False)
         tw = d.textlength(c, font=f)
-        cw, ch = int(tw) + 34, 38
+        cw, ch = int(tw) + 32, 38
         chip = rounded_glass((cw, ch), ch // 2, alpha=30)
         canvas.alpha_composite(chip, (x, 372))
-        d.text((x + 17, 372 + 9), c, font=f, fill=ACCENT_SOFT)
-        x += cw + 12
+        d.text((x + 16, 372 + 10), c, font=f, fill=ACCENT_SOFT)
+        x += cw + 10
 
     d.text((80, 452), "github.com/1104480426-hash/jev-qq-assist",
            font=font(18, bold=False), fill=(96, 122, 117))
