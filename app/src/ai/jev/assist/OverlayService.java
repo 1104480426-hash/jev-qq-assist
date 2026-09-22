@@ -735,21 +735,39 @@ public class OverlayService extends Service {
         }
 
         collapsing = true;
+
+        // 先把球放出来（就在卡片中心，位置上面已经写好了），再从透明渐显到不透明。
+        // 直接等卡片缩完再显示球会闪一下：那一刻卡片已经 alpha 0、内容看不见了，
+        // 却还占着窗口，屏幕上只剩聊天背景，下一帧球才出现。两个视图交叉淡化就没有
+        // 这个空档——任何时刻都至少有一个可见。球后添加，所以在卡片上层。
+        showBall();
+        if (ballView != null) {
+            ballView.setAlpha(0f);
+        }
+
         cardView.animate()
                 .alpha(0f)
                 .scaleX(0.72f)
                 .scaleY(0.72f)
-                .setDuration(140)
+                .setDuration(150)
                 .setInterpolator(new android.view.animation.AccelerateInterpolator())
                 .withEndAction(new Runnable() {
                     @Override
                     public void run() {
                         collapsing = false;
                         removeCard();
-                        showBall();
                     }
                 })
                 .start();
+
+        if (ballView != null) {
+            ballView.animate()
+                    .alpha(1f)
+                    .setStartDelay(50)
+                    .setDuration(110)
+                    .start();
+        }
+
         // 胶囊这时候就该消失，不必等卡片缩完
         removePill();
     }
