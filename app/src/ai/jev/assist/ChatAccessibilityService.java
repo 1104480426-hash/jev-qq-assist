@@ -480,6 +480,14 @@ public class ChatAccessibilityService extends AccessibilityService {
             // 只看上面三条，再远就不可能是这条消息的昵称
             for (int j = i - 1; j >= 0 && j >= i - 3; j--) {
                 Line above = kept.get(j);
+                // 已经有昵称在上面挂着的行是正文，不能再去当别人的昵称。实测
+                // 「蚁巢验资和拉新都去」两头被认领：它上面是「管理员 坤山靠」的昵称，
+                // 所以它是正文；可它又被当成了下面那条「图片」的昵称。结果它自己
+                // 不输出了，署名还挂到了图片上。继续往上找，别 break——更上面还有
+                // 可能是这条消息真正的昵称。
+                if (speakerOf.containsKey(above)) {
+                    continue;
+                }
                 if (looksLikeSpeakerLabel(above, cur)) {
                     labels.add(above);
                     speakerOf.put(cur, above.text);
@@ -604,7 +612,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                     continue;
                 }
                 Line other = lines.get(j);
-                if (!overlapsVertically(l, other)) {
+                if (!sameRow(l, other)) {
                     continue;
                 }
                 // 左边那块要右边有字才算头像，右边那块要左边有字
@@ -622,14 +630,27 @@ public class ChatAccessibilityService extends AccessibilityService {
     }
 
     /**
-     * 两行的纵向范围是否有交集。
+     * 两行是不是画在同一水平行上。
      *
-     * <p>判断"是不是同一水平行上的东西"用这个而不是比 top 相等：各 App 的头像格子
-     * 和它右边的昵称并不总是严格顶对齐。抖音那句头像 desc 的 top 是 1080，昵称是 1107，
-     * 差 27，按"顶边相差 4 以内"去认就漏了；但它们纵向明显交叠。
+     * <p>不能用"有交叠就算"：昵称的上边框常常和上一条消息的下边框差一两像素交叠，
+     * 那样会把两条不同的消息粘成一条（实测把「48啊 我几把算错了」和下一行的
+     * 「管理员 韵. 对啊」拼到了一起）。要求重叠部分占较矮那行的一半以上，
+     * 真正并排的两段（头衔与昵称、头像与昵称）自然满足，首尾相接的一两像素则不满足。
+     *
+     * <p>不用"顶边相差几像素"是因为各 App 的并排元素并不严格顶对齐：抖音那个头像
+     * desc 的 top 是 1080，右边昵称是 1107，差 27。
      */
-    private static boolean overlapsVertically(Line a, Line b) {
-        return Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+    private static boolean sameRow(int topA, int bottomA, Line b) {
+        int overlap = Math.min(bottomA, b.bottom) - Math.max(topA, b.top);
+        if (overlap <= 0) {
+            return false;
+        }
+        int shorter = Math.min(bottomA - topA, b.height());
+        return overlap * 2 >= shorter;
+    }
+
+    private static boolean sameRow(Line a, Line b) {
+        return sameRow(a.top, a.bottom, b);
     }
 
     /**
@@ -651,7 +672,7 @@ public class ChatAccessibilityService extends AccessibilityService {
             while (j < lines.size()) {
                 Line next = lines.get(j);
                 // 与已经攒起来的这段范围比对，而不是只跟第一段比——三段的行也接得上
-                if (Math.min(bottom, next.bottom) - Math.max(top, next.top) <= 0) {
+                if (!sameRow(top, bottom, next)) {
                     break;
                 }
                 text.append(' ').append(next.text);
@@ -725,7 +746,7 @@ public class ChatAccessibilityService extends AccessibilityService {
         int raw = lines.size();
         lines = sanitize(lines, width, height);
         for (Line l : lines) {
-            trace("A [" + l.top + "," + l.bottom + "," + l.left + "] " + head(l.text));
+            trace("A [" + l.top + "," + l.bottom + "," + l.left + " c" + l.centerX + "] " + head(l.text));
         }
 
         List<Message> messages = groupMessages(lines, width);
@@ -738,7 +759,10 @@ public class ChatAccessibilityService extends AccessibilityService {
                 speakers.add(m.speaker);
             }
         }
-        boolean groupChat = speakers.size() >= 2;
+        // 认出一个署名就算群聊。原来要求两个不同昵称，结果「只我一个人在发」的群被判成
+        // 单聊，整段走左右分栏——那条系统提示「全员禁言中」就是这样被算成「我」的。
+        // 单聊不会有署名行，这里放宽不会误伤：配对本身的约束（行间距、高度差、标点）已经够严。
+        boolean groupChat = speakers.size() >= 1;
 
         int split = dynamicSplit(lines, width);
         boolean dynamic = split > 0;
@@ -765,25 +789,43 @@ public class ChatAccessibilityService extends AccessibilityService {
             }
             previous = m.text;
 
+            Integer cx = xByTop.get(m.top);
+            int mx = cx == null ? split : cx;
+
             String who;
             if (groupChat && m.speaker.length() > 0) {
                 // 群聊：直接用昵称，让判定模型分得清谁是谁
                 who = m.speaker + "：";
-            } else {
-                Integer cx = xByTop.get(m.top);
-                int x = cx == null ? split : cx;
-                if (x < split - margin) {
-                    who = "对方：";
-                } else if (x > split + margin) {
+            } else if (Math.abs(mx - width / 2) < width * 0.05) {
+                // 水平居中的是系统提示（「全员禁言中，仅群主和管理员可发言」
+                // 「你撤回了一条消息」这类），不属于任何一方。放在署名之后判断：
+                // 有署名的消息即使位置居中，那个署名也比位置可信。
+                who = "";
+            } else if (groupChat) {
+                // 群聊里没认出署名的那些。这个场景下"左边是对方、右边是我"不成立：
+                // 所有人都在左边，两簇聚类能凭空造出一条中线来。所以只有明显贴到
+                // 右边缘才算自己发的，其余一律按对方处理——把别人的话算到我头上，
+                // 比标错一次"对方"代价大得多。
+                if (mx > width * 0.62) {
                     who = "我：";
+                } else if (mx < split - margin) {
+                    who = "对方：";
                 } else {
                     who = "";
                 }
+            } else if (mx < split - margin) {
+                who = "对方：";
+            } else if (mx > split + margin) {
+                who = "我：";
+            } else {
+                who = "";
             }
             if (sb.length() > 0) {
                 sb.append('\n');
             }
             sb.append(who).append(m.text);
+            // 只记前缀和长度，不记正文：够判断"谁被算成了谁"，不至于把整段聊天抄进日志
+            trace("T [" + who + "] len=" + m.text.length());
         }
         return sb.toString();
     }
@@ -828,6 +870,12 @@ public class ChatAccessibilityService extends AccessibilityService {
             }
             lo = s1 / n1;
             hi = s2 / n2;
+        }
+        // 迭代完再看一次两簇中心的距离。开头那次 min/max 差得远，不代表聚类结果真的
+        // 分得开：群里气泡全在左侧时，min/max 能差 200 像素以上，可两簇中心其实挨在
+        // 一起，取平均就成了一条凭空造出来的中线，把左侧消息判到"我"那一栏去。
+        if (hi - lo < width * 0.15) {
+            return -1;
         }
         return (int) ((lo + hi) / 2);
     }
