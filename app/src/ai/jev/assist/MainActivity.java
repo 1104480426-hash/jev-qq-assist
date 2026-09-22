@@ -235,7 +235,10 @@ public class MainActivity extends Activity {
         }
         String preview = live.length() > 900 ? live.substring(0, 900) + "\n…（还有 "
                 + (live.length() - 900) + " 字）" : live;
-        outputView.setText("—— 当前窗口实际读到 " + live.length() + " 字 ——\n\n" + preview);
+        String stats = ChatAccessibilityService.lastStats();
+        outputView.setText("—— 当前窗口实际读到 " + live.length() + " 字 ——\n"
+                + (stats.length() > 0 ? stats + "\n" : "")
+                + "\n" + preview);
     }
 
     /** 加载本地模型并跑一次自检，全程在后台线程。 */

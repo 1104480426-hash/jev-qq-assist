@@ -38,6 +38,18 @@ public class ChatAccessibilityService extends AccessibilityService {
     /** 已连接的服务实例，用于按需立刻抓取。 */
     private static volatile ChatAccessibilityService instance;
 
+    /**
+     * 最近一次抓取的统计：原始多少行、过滤掉多少、识别出几条消息、几行拿到了署名。
+     *
+     * <p>判定不对时先看这个：是根本没抓到（原始行数太少），还是抓到了但署名没认出来。
+     * 两者要修的地方完全不同。
+     */
+    private static volatile String lastStats = "";
+
+    public static String lastStats() {
+        return lastStats;
+    }
+
     private static final long THROTTLE_MS = 250L;
     private static final int MAX_NODES = 4000;
 
@@ -66,7 +78,22 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (s == null) {
             return null;
         }
-        return s.captureActiveWindow();
+        String fresh = s.captureActiveWindow();
+        if (fresh != null && fresh.length() > 0) {
+            // 写回缓存。这样用户切回设置页时，看到的就是刚才那次判定实际用的文本，
+            // 而不是上一次被动事件留下的、可能来自别的窗口的旧内容。
+            String pkg = "";
+            AccessibilityNodeInfo root = s.getRootInActiveWindow();
+            if (root != null) {
+                CharSequence p = root.getPackageName();
+                pkg = p == null ? "" : p.toString();
+                recycleSafely(root);
+            }
+            cachedTranscript = fresh;
+            lastCapturePkg = pkg;
+            lastCaptureAt = System.currentTimeMillis();
+        }
+        return fresh;
     }
 
     private String captureActiveWindow() {
@@ -275,6 +302,19 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (value.matches("^\\d{1,2}:\\d{2}(:\\d{2})?$") || value.matches("^\\d+$")) {
             return false;
         }
+        // QQ 群聊的分隔条长这样：「112609 2026-09-22 16:28:25」，
+        // 序号 + 日期 + 时间。混进转录会打断「昵称-消息」的相邻关系。
+        if (value.matches("^\\d{3,8}\\s+\\d{4}-\\d{1,2}-\\d{1,2}\\s+\\d{1,2}:\\d{2}(:\\d{2})?$")) {
+            return false;
+        }
+        // 纯日期，或日期打头的行
+        if (value.matches("^\\d{4}-\\d{1,2}-\\d{1,2}(\\s.*)?$")) {
+            return false;
+        }
+        // 群名 + 成员数这种标题：「某某群(1489)」
+        if (value.matches("^.{1,30}\\(\\d{1,6}\\)$")) {
+            return false;
+        }
         // 至少要有一个中日韩字符或字母，纯符号不要
         return value.matches(".*[\\p{IsHan}A-Za-z].*");
     }
@@ -337,6 +377,16 @@ public class ChatAccessibilityService extends AccessibilityService {
             }
         }
 
+        int named = 0;
+        for (java.util.Map.Entry<Line, String> e : speakerOf.entrySet()) {
+            if (e.getValue() != null && e.getValue().length() > 0) {
+                named++;
+            }
+        }
+        lastStats = "原始 " + lines.size() + " 行 · 过滤后 " + kept.size()
+                + " 行 · 成条 " + (kept.size() - labels.size())
+                + " · 认出署名 " + named;
+
         List<Message> out = new ArrayList<>(kept.size());
         for (Line cur : kept) {
             if (labels.contains(cur)) {
@@ -375,8 +425,12 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (a.text.matches(".*[。！？!?]$")) {
             return false;
         }
-        // 昵称也短：宽于下面那行的一半，多半是两条挨着的消息，不是标签
-        return a.text.length() <= Math.max(4, b.text.length() / 2);
+        // 高度差足够明显时（矮于 70%），不必再比长度——群昵称可以很长，
+        // 而它下面第一条可能只有两三个字（实测 QQ 群里「nbox准备起飞倒计时了」
+        // 就是被这条规则误杀的）。只有当两者高度接近、光看高度分不出来时，
+        // 才用长度做二次区分，避免把两条挨着的短消息认成一对。
+        boolean clearlyShorter = a.height() < b.height() * 0.7;
+        return clearlyShorter || a.text.length() <= Math.max(4, b.text.length() / 2);
     }
 
     private String buildTranscript(List<Line> lines, int width) {
