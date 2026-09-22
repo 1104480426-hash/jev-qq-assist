@@ -4,13 +4,11 @@
 
 **基于 Jev 的聊天决策辅助。** 装在手机里的聊天参谋：读当前聊天窗口的文字，交给决策模型给出一组**类型化判定**——对方是不是在等你回、他想要什么、情绪多强、这句随便回会不会把事情弄糟、该用哪种策略回。
 
-**不挑 App。** 读屏服务不设任何包名白名单，QQ、微信、飞书、钉钉、Telegram 都是一样的流程。名字里的 QQ 只是它出生的地方，不是它的边界。
-
 它只给判决，不替你打字。
 
 **→ [下载 APK](https://github.com/1104480426-hash/jev-wingman/releases/latest)** · 装到手机上就能用，不需要电脑、不需要编译
 
-<sub>English: An on-device chat co-pilot built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads whatever chat window is on screen via Android Accessibility (read-only, never sends), with no package allowlist: QQ, WeChat, Feishu, Telegram and anything else behave the same. Judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you. Grab the APK from Releases — no toolchain required.</sub>
+<sub>English: An on-device chat co-pilot built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads whatever chat window is on screen via Android Accessibility (read-only, never sends), with no package allowlist. Judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat.</sub>
 
 ---
 
@@ -28,7 +26,7 @@ Jev 官方是闭源托管服务，**不能本地部署**。它也没有一个开
 
 ## 它不是什么
 
-- **不是 QQ 机器人。** 没有服务端、不接 OneBot、不登录账号、不代收发消息。它是一个前台服务加一个无障碍服务，只读屏幕。
+- **不是聊天机器人。** 没有服务端、不接 OneBot、不登录账号、不代收发消息。它是一个前台服务加一个无障碍服务，只读屏幕。
 - **不是官方 Jev，也不声称复现了它的精度。** 本地模式的判定内核是 `bge-small-zh-v1.5` 的句向量相似度（见下文），和 TypeSafe 的模型没有任何关系。
 - **不会自动回消息。** 代码里没有任何一处发送路径。
 
@@ -48,7 +46,7 @@ Jev 官方是闭源托管服务，**不能本地部署**。它也没有一个开
 |---|---|---|
 | 结果延迟 | 49 – 64 ms | 约 870 ms |
 | 模型加载 | 432 ms（一次性） | 无 |
-| APK 体积 | 22.6 MB | 同 |
+| APK 体积 | 22.3 MB | 同 |
 | 需要网络 | 否 | 是 |
 | 需要 API key | 否 | 是 |
 
@@ -56,7 +54,7 @@ Jev 官方是闭源托管服务，**不能本地部署**。它也没有一个开
 
 ```
 本地 bge-small-zh                       远端 jev-1.13.0
-─────────────────────────────────       ─────────────────────────────────
+────────────────────────────────       ─────────────────────────────────
 是否在等回复：否  27%                     是否在等回复：是  92%
 对方意图：闲聊搭话  30%                    对方意图：表达不满  47%
 情绪强度：明显不快  (1.63/3)               情绪强度：明显不快  (1.63/3)
@@ -69,11 +67,11 @@ Jev 官方是闭源托管服务，**不能本地部署**。它也没有一个开
 ## 工作原理
 
 ```
-当前聊天窗口（QQ / 微信 / 飞书 / 任意聊天 App）
+当前聊天窗口（QQ / 飞书 / 抖音 / 任意把文字暴露给无障碍的聊天 App）
    │  AccessibilityService 读取节点文本，不设包名白名单
-   │  按气泡的屏幕横坐标推断说话人（左=对方，右=我，中间不加前缀）
+   │  按「昵称紧贴正文上方」认发言人；认不出才退回左右分栏
    ▼
-对话转录（最近 N 行，默认 12，可调）
+对话转录（最近 N 行，默认 20，可调 2–60）
    │  点击悬浮球触发；全程只读，不注入文本、不点发送
    ▼
 ┌──────────────────────┬────────────────────────────────┐
@@ -89,18 +87,41 @@ noul / choice / score 三种答案 → 悬浮卡片
 
 本地模式的方法是 Jev「读 logits、不生成文本」的一个近似：**一个问题的所有候选里，语义上最贴近当前上下文的那个胜出**，softmax 给出可比较的概率。候选描述在判定前一次性全部编码并缓存，所以真正判定时只算一次上下文向量，这是它能跑进 50 ms 的原因。
 
+### 一条消息在无障碍树里不是一行
+
+这是整条链路里最脏的一段，值得单独说。以实测的一个 QQ 群（1080×2400）为例，屏幕上的四条消息在树里长这样：
+
+| 节点 | top, bottom, left | 长度 | 是什么 |
+|---|---|---|---|
+| FrameLayout(desc) | 477, 585, 32 | 7 | **头像**，desc 是「张博文的资料卡」 |
+| TextView | 477, 521, 161 | 3 | 昵称 |
+| TextView | 521, 685, 140 | 2 | 消息正文 |
+| TextView | 1394, 1437, 732 | 3 | 群头衔「管理员」 |
+| TextView | 1394, 1438, 837 | 5 | 昵称「bello」 |
+| TextView | 1438, 1602, 705 | 3 | 消息正文 |
+| FrameLayout(desc) | 1394, 1502, 940 | 5 | **自己的头像**，desc 是「我的资料卡」 |
+
+于是清理分四步，顺序不能换：
+
+1. **扔头像**。它的 content-desc 是「某某的资料卡」，七个字起步，靠"短"去认一条也认不出来。管用的判据是位置：头像在屏幕两端（左右各 5% / 13% 边带），最靠近中间的文字纵向与它有交叠就是头像。漏掉右边那一支代价很大——自己的头像会和对面昵称合并，署名直接变成「管理员 bello 我的资料卡」。
+2. **合并同一行**。群头衔和昵称是两个 TextView 同一行，不合并的话「管理员」自己会变成一条消息；合并之后昵称变长（实测 13 个字），所以昵称长度上限放到 24——卡在 12 的时候，三人发言的群只能认出一个署名。
+3. **扔标题栏**。返回、群名、成员数、聊天设置，整行落在屏幕顶部 11% 以内就丢。**不建词表**，词表换个 App 就废了。11% 这个数是单聊顶部「在线 某某」（底边 246）逼出来的。
+4. **配对昵称与正文**。昵称一定比正文矮（低于正文高度 85%）且更短，跟正文的纵向间距在 0–26 px 之间；末尾带句号问号的排除掉。认出来的昵称写进转录（`张三：…`），让 Jev 自己分辨谁在跟谁说话。
+
+坐标系另有一个 168 像素的坑：`getResources().getDisplayMetrics()` 给读屏服务的高度是 **2232**，而节点坐标是含状态栏的 **2400**。两套混用，标题栏下沿整体偏 168 像素；实测差 **0.5 像素** 就漏掉了那行「在线 某某」。真实高度要用 `WindowManager.getCurrentWindowMetrics()` 取。
+
 ## 安装
 
-到 [Releases](https://github.com/1104480426-hash/jev-wingman/releases/latest) 下载 `jev-assist-v1.0.0.apk`，在手机上点开装上就行。**不需要电脑、不需要 Android SDK、不需要编译。**
+到 [Releases](https://github.com/1104480426-hash/jev-wingman/releases/latest) 下载 `jev-assist-v1.6.0.apk`，在手机上点开装上就行。**不需要电脑、不需要 Android SDK、不需要编译。**
 
-- Android 8.0 及以上（arm64-v8a），22.6 MB
+- Android 8.0 及以上（arm64-v8a），22.3 MB
 - **模型已经打进 APK 里**，装完离线可用
 - 用调试密钥签名，安装时系统会提示来源不明，允许即可
 
 **装好后授权两项**（系统不允许 App 静默拿到，界面上各有一个按钮引导）：
 
 1. **悬浮窗权限** —— 需要「显示在其他应用上层」。
-2. **无障碍服务** —— 打开「Jev 聊天参谋」，用于读取聊天窗口文字。它只读：不注入输入、不点击发送、不代发任何消息。
+2. **无障碍服务** —— 打开「Jev 僚机 · 读取聊天内容」，用于读取聊天窗口文字。它只读：不注入输入、不点击发送、不代发任何消息。
 
 想先确认装好了没有，点「查看演示模式」：它用一段内置的虚构对话把整条链路跑一遍，不碰任何真实聊天记录，也方便自己截图发帖。
 
@@ -117,6 +138,8 @@ noul / choice / score 三种答案 → 悬浮卡片
 点一次球出结果，默认收成贴在球旁边的一条胶囊，几乎不占聊天区；再点一次展开完整判定；再点一次全部收起。卡片上因此没有「收起」按钮，展开和收起都归球管。判定在跑的时候标题会动，因为本地模型首次加载要几秒。
 
 **胶囊和卡片都挂在球上。** 拖动悬浮球时它们跟着走，球吸附到屏幕边缘时还会自动换到背向屏幕中心的那一侧，不会跑出屏幕。卡片可以单独拖到你喜欢的位置，记住的是**相对球的偏移**而不是绝对坐标——所以球以后挪到哪，卡片都按同样的相对关系跟过去。
+
+**判定记的是你点球那一刻的画面。** 结果连同来源 App 和时间一起存下来，之后切到设置页看到的仍然是刚才那个 QQ 群的内容，不会被前台 App 的窗口覆盖成"最近读自 桌面"。设置页会标出这是几分钟前读的。
 
 判定结果可以点「复制」拿走。API Key 不会回填到设置界面上——那个页面很容易被截图，字段留空即表示沿用已保存的值。
 
@@ -153,35 +176,13 @@ SDK / JDK 不在默认位置时：`build.ps1 -Sdk <path> -Jdk <path>`，或设�
 
 远端模式的 questions 用英文（TypeSafe 官方文档明确英文训练最充分，CJK 属于 "handled but not equally well"）；本地模式用中文，因为句向量模型是中文优化的。两套规格共用同一个渲染层。
 
-## 技术要点
-
-### 纯 Java 的 BERT 分词器，经过对拍
-
-`BertTokenizer` 不用任何 native 依赖，行为对齐模型自带的 `tokenizer.json`：不转小写、不剥离重音、中文逐字切分、`[CLS]A[SEP]` 模板。
-
-它和 HuggingFace 的 tokenizer 做过逐 id 对拍，覆盖中英混排、标点、全角符号、emoji 代理对，**10/10 完全一致**：
-
-```powershell
-javac -encoding UTF-8 -d tools/out tools/TokenizerProbe.java app/src/ai/jev/assist/BertTokenizer.java
-java "-Dfile.encoding=UTF-8" -cp tools/out ai.jev.assist.TokenizerProbe app/assets/models/bge-small-zh/vocab.txt tools/probe_java.txt
-python tools/probe_py.py
-```
-
-> 注意 `tokenizer_config.json` 必须和 `tokenizer.json` 一起在场。缺了它，transformers 会用 `BertTokenizerFast` 的默认 `do_lower_case=True`，而官方配置是 `false`——对拍会因此报出并不存在的差异。这个坑当时真的踩了。
-
-### 两个构建期的坑
-
-**assets 不能用 aapt2 的 `-A` 打包。** Windows 上 aapt2 用反斜杠生成条目名（`assets/models\bge-small-zh\x.json`），整条路径被当成一个文件名，`AssetManager.open()` 必定抛 `FileNotFoundException`。本项目改由 `pack_apk.py` 用正斜杠写入资产。
-
-**悬浮球尺寸要在代码里定死。** `inflate(R.layout.x, null)` 会丢掉 XML 根节点的 `layout_width/height`，只靠 `wrap_content` 会让球被挤成 25×68 像素，肉眼几乎看不见。`OverlayService` 里显式设置像素尺寸。
-
 ## 各 App 支持情况
 
 界面文字是走 Android 无障碍树读的，**所以某个 App 能不能用，取决于它愿不愿意把内容暴露给无障碍**——这一条完全不由本项目决定。实测（小米 14 / Android 16，各 App 首页）：
 
 | App | 无障碍节点 | 含文字的节点 | 可用 |
 |---|---|---|---|
-| QQ | 232 | 28 | ✅ |
+| QQ | 232 | 28 | ✅ 单聊与群聊均已实测 |
 | 飞书 | 220 | 38 | ✅ |
 | 抖音 | 247 | 24 | ✅ |
 | **微信** | **1** | **0** | ❌ |
@@ -190,10 +191,10 @@ python tools/probe_py.py
 
 ## 已知限制
 
+- **说话人靠几何规律推断，不靠控件语义。** 群聊认「昵称紧贴正文上方、比正文矮、也更短」这三条，一对一退回气泡左右位置。后者是通用兜底，前者在实测的 QQ 群结构上成立——但换一个 App 的排版就可能失效，届时群聊里的人会全部退化成「对方」。这是启发式的固有代价。
+- **Jev 对"这句话是不是冲我来的"分辨力有限。** 先前的实测里，同一个群聊场景只改署名方式，紧张度就从 1.99 降到 1.47，方向仍然是偏高的；它并不知道那场争吵跟你没关系。署名能缓解，不能解决。详见 [`docs/jev-behavior-notes.md`](docs/jev-behavior-notes.md)。
 - **本地模式的细粒度判定会飘。** 句向量相似度对「情绪强度」这种连续量不敏感，把平静的对话误报成不快的概率不低。粗分类（是否在等回复、有无风险）相对可靠。想要质量就用远端模式。
-- **判定是基于当前屏幕文本的。** 如果聊天窗口只加载了最近几条，判定就只看到这几条。只喂最后一句时，Jev 会把一段有争执的对话判成「平静、闲聊」，而且置信度高达 0.92——详见 [`docs/jev-behavior-notes.md`](docs/jev-behavior-notes.md)。
-- **说话人靠几何规律推断。** 一对一按气泡的左右位置分；群聊则靠「昵称紧贴消息上方、比正文矮、也更短」这三条来找昵称。后者在实测的群聊结构上成立，但换一个 App 的排版就可能失效，届时退回左右分栏（所有人都会变成「对方」）。
-- **群聊的上下文没有真正隔离。** 现在是把昵称写进转录（`张三：…`），让 Jev 自己分辨谁在跟谁说话。实测比不署名好（紧张度 1.47 vs 1.99），但没彻底解决——给每组对话单独切一条序列分别判定，是还没做的事。
+- **上下文不足时置信度是虚高的。** 只喂最后一句时，Jev 会把一段有争执的对话判成「平静、闲聊」，而且置信度高达 0.92。所以抓到的行数太少时（刚进聊天窗口、对方只发了一句），不要信那个百分比。
 - **不做历史积累。** 每次判定都是独立的一次，没有跨会话的上下文或记忆。
 
 ## 隐私
@@ -201,7 +202,20 @@ python tools/probe_py.py
 - 读屏服务**只读**：它遍历当前窗口的节点取文本，不执行任何 action，不注入输入，不点击发送。
 - **本地模式的数据完全不出手机**，判定在设备内完成。
 - **远端模式**会把最近 N 行对话作为 `state` 发给所配置的端点（默认是 TypeSafe 官方）。用之前请确认你接受这一点，并按需改成自建服务。
+- 调试日志只打印控件类名、坐标、长度和每条文本的**前十个字**，不留完整对话；这个开关默认关。
 - 本项目不收集任何遥测。
+
+## 更新日志
+
+| 版本 | 内容 |
+|---|---|
+| **v1.6.0** | 群聊按昵称署名（实测 QQ 群三到四人全部认对），不再是「所有人都是对方」；判定记住点球那一刻的画面、来源与时间；数字消息（`9.19`、`666`）不再被当噪声吞掉；长昵称与「管理员」头衔同行合并；全体禁言等系统提示不再被误署成「我」；默认上下文 12 → 20 行 |
+| v1.5.0 | 面板的毛玻璃质感 |
+| v1.4.0 | 悬浮球作为唯一的展开/收起开关 |
+| v1.3.0 | 展开的卡片跟随悬浮球 |
+| v1.2.0 | 结果默认收成胶囊，不再挡聊天 |
+| v1.1.0 | 图标与 iOS 液态玻璃界面 |
+| v1.0.0 | 首次发布 |
 
 ## 关于 Jev
 
