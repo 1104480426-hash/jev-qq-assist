@@ -254,6 +254,14 @@ public class ChatAccessibilityService extends AccessibilityService {
             return;
         }
         try {
+            // 来源包名要用 root 的，不能用事件的。事件可能是状态栏或输入法发出来的，
+            // 而 getRootInActiveWindow() 拿到的是真正的活动窗口——实测就这样把一份
+            // 读对了的 QQ 群聊标成了「最近读自 com.android.systemui」。
+            CharSequence rp = root.getPackageName();
+            String owner = rp == null ? pkg : rp.toString();
+            if (owner.equals(getPackageName())) {
+                return;      // 被动路径同样不抓自己的界面
+            }
             List<Line> lines = new ArrayList<>();
             collect(root, lines, 0);
             if (lines.isEmpty()) {
@@ -265,7 +273,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 return;
             }
             cachedTranscript = transcript;
-            lastCapturePkg = pkg;
+            lastCapturePkg = owner;
             lastCaptureAt = now;
 
             // 顺手记下每行占的纵向范围，卡片靠它避让
