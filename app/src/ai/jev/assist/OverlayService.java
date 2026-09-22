@@ -88,6 +88,8 @@ public class OverlayService extends Service {
     private static final int STATE_NONE = 0;
     private static final int STATE_CARD = 1;
     private static final int STATE_PILL = 2;
+    /** 判定还没回来。形态和结果胶囊一样，但点它是收掉而不是展开。 */
+    private static final int STATE_WAITING = 3;
     private int displayState = STATE_NONE;
 
     @Override
@@ -332,13 +334,16 @@ public class OverlayService extends Service {
      * 悬浮球是唯一的总开关。每次点击把状态推进一格：
      *
      * <pre>
-     *   无 ──点──> 判定中（卡片带进度动画）
+     *   无 ──点──> 判定中（胶囊，文字在动）
      *   判定中 ──点──> 直接收掉
      *   胶囊 ──点──> 展开成完整卡片
      *   卡片 ──点──> 全部收起，回到无
      * </pre>
      *
      * <p>所以卡片上不再需要「收起」按钮，展开和收起都由球负责。
+     *
+     * <p>判定中也用胶囊，不用卡片：否则点一下球先弹出一大块面板、判定回来又缩成一条，
+     * 一伸一缩看着像是界面出了错。等待和结果本来就该是同一个形态。
      */
     private void onBallTap() {
         switch (displayState) {
@@ -347,8 +352,9 @@ public class OverlayService extends Service {
                 removePill();
                 showCard();
                 return;
+            case STATE_WAITING:
             case STATE_CARD:
-                // 卡片形态（结果或错误）点一下就全收掉
+                // 判定还没回来、或者正在看卡片：点一下就全收掉
                 dismissed = true;
                 removeCard();
                 removePill();
@@ -378,11 +384,14 @@ public class OverlayService extends Service {
         String hint = Prefs.isLocal(this)
                 ? "已取最近 " + Prefs.contextLines(this) + " 行对话，本地模型判定中（首次会加载模型，稍慢）"
                 : "已取最近 " + Prefs.contextLines(this) + " 行对话，正在问远端判定端点。";
+        // 卡片内容照旧准备好（判定途中被展开就是这个），但等待态本身用胶囊显示
         headlineText = "正在判定";
         bodyText = hint;
         metaText = "";
         retryable = false;
-        showCard();
+        pillText = "正在判定";
+        riskHigh = false;
+        showPill(STATE_WAITING);
         startProgress();
         ask(transcript);
     }
@@ -489,12 +498,26 @@ public class OverlayService extends Service {
     // ---- 胶囊：结果默认形态 ----
 
     private void showPill() {
+        showPill(STATE_PILL);
+    }
+
+    /**
+     * @param state {@link #STATE_PILL} 是判定结果，点它展开详情；
+     *              {@link #STATE_WAITING} 是判定途中，点它等同于点球——收掉
+     */
+    private void showPill(final int state) {
         stopProgress();
         removeCard();
         removePill();
 
         pillView = LayoutInflater.from(this).inflate(R.layout.decision_pill, null);
         ((TextView) pillView.findViewById(R.id.pill_text)).setText(pillText);
+
+        // 等待态点了是收掉，没有详情可展开，所以别挂着会骗人的「展开」
+        View expand = pillView.findViewById(R.id.pill_expand);
+        if (expand != null) {
+            expand.setVisibility(state == STATE_WAITING ? View.GONE : View.VISIBLE);
+        }
 
         // 风险高的时候点变橙，扫一眼就知道这条要不要认真对待
         View dot = pillView.findViewById(R.id.pill_dot);
@@ -520,6 +543,13 @@ public class OverlayService extends Service {
         pillView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                if (state == STATE_WAITING) {
+                    // 结果还没回来，没有详情可展开，点了就收掉
+                    dismissed = true;
+                    removeCard();
+                    removePill();
+                    return;
+                }
                 // 点胶囊等同于再点一次悬浮球，直接进详情
                 removePill();
                 showCard();
@@ -532,7 +562,7 @@ public class OverlayService extends Service {
             pillView = null;
             return;
         }
-        displayState = STATE_PILL;
+        displayState = state;
 
         // 加进去之后才知道它多宽，这时才能把它摆在球旁边
         pillView.measure(
@@ -805,16 +835,16 @@ public class OverlayService extends Service {
         progressTick = new Runnable() {
             @Override
             public void run() {
-                if (cardView == null) {
+                if (pillView == null) {
                     return;
                 }
-                View headline = cardView.findViewById(R.id.card_headline);
-                if (headline instanceof TextView) {
+                View text = pillView.findViewById(R.id.pill_text);
+                if (text instanceof TextView) {
                     StringBuilder sb = new StringBuilder("正在判定");
                     for (int i = 0; i < progressDots; i++) {
                         sb.append('.');
                     }
-                    ((TextView) headline).setText(sb.toString());
+                    ((TextView) text).setText(sb.toString());
                 }
                 progressDots = (progressDots + 1) % 4;
                 ui.postDelayed(this, 450);
