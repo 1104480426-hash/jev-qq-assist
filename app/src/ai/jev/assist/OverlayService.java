@@ -1051,6 +1051,11 @@ public class OverlayService extends Service {
     private String clipText() {
         StringBuilder sb = new StringBuilder();
         sb.append("【Jev 判定】").append(headlineText);
+        if (confidenceText.length() > 0) {
+            // 把握度也得带上：切出去看的时候「先听完，别讲道理」和
+            // 「先听完，别讲道理，把握 55%」是两条信息
+            sb.append("（").append(confidenceText).append("）");
+        }
         if (bodyText.length() > 0) {
             sb.append("\n\n").append(bodyText);
         }

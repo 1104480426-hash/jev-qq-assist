@@ -331,7 +331,10 @@ public final class DecisionSpec {
         if ("venting".equals(intent)) {
             return new String[]{"先听完，别讲道理", "intent"};
         }
-        if ("invitation".equals(intent)) {
+        if ("invitation".equals(intent) && awaiting >= 0.5) {
+            // 「别拖着」只有在对方确实等着时才成立。awaiting 低的时候这句话是假的——
+            // 实测「明天那家店还去吗……那就这么定了」这段，最后一句是对方在收尾，
+            // awaiting 只有 12%，标题却还在催他给个准话。让它落到下面的策略分支去。
             return new String[]{"给个准话，别拖着", "intent"};
         }
         // 策略放在风险前面：风险只说明"这句容易踩雷"，策略才说得出该怎么回。
@@ -371,6 +374,7 @@ public final class DecisionSpec {
     /** 解释：第一句说对方现在什么状态，第二句说具体怎么回。 */
     static String plainAdvice(JSONObject answers) {
         double tension = score(answers, "tension");
+        double awaiting = noul(answers, "awaiting_reply");
         String intent = choice(answers, "intent");
         String strategy = choice(answers, "strategy");
 
@@ -397,11 +401,13 @@ public final class DecisionSpec {
         } else if ("probing".equals(intent)) {
             tail = "，在试探你的态度";
         } else if ("invitation".equals(intent)) {
-            tail = "，在等你答复";
+            // 和标题同一个道理：「在等你答复」得有 awaiting 撑着。对方已经把话说完了
+            // 的时候还这么说，就会和依据行的「对方没在等」当面打架。
+            tail = awaiting >= 0.5 ? "，在等你答复" : "，是在跟你约时间";
         } else if ("closing".equals(intent)) {
             tail = "，想把话收尾了";
         } else if ("question".equals(intent)) {
-            tail = "，在等你给个答案";
+            tail = awaiting >= 0.5 ? "，在等你给个答案" : "，在问一件具体的事";
         } else if ("smalltalk".equals(intent)) {
             tail = "，没什么正事";
         } else {
