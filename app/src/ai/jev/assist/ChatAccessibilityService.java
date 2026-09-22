@@ -156,6 +156,11 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (pkg.length() == 0) {
             return;
         }
+        // 不抓自己的界面。否则用户切回设置页看结果时，缓存立刻被设置页覆盖，
+        // 就永远看不到刚刚在聊天窗口里到底抓到了什么。
+        if (pkg.equals(getPackageName())) {
+            return;
+        }
 
         long now = System.currentTimeMillis();
         if (pkg.equals(lastPkg) && now - lastEventAt < THROTTLE_MS) {
