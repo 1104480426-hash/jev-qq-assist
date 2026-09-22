@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Jev 聊天参谋</string>
+    <string name="app_name">Jev 僚机</string>
     <string name="demo_label">演示模式</string>
-    <string name="accessibility_label">Jev 聊天参谋 · 读取聊天内容</string>
+    <string name="accessibility_label">Jev 僚机 · 读取聊天内容</string>
     <string name="accessibility_desc">读取当前聊天窗口的文字内容，交给 Jev 决策模型判断该不该回复、用什么策略回复。不会自动发送任何消息。</string>
     <string name="fgs_channel">聊天参谋常驻</string>
-    <string name="fgs_title">Jev 聊天参谋运行中</string>
+    <string name="fgs_title">Jev 僚机运行中</string>
     <string name="fgs_text">点悬浮球获取当前对话的决策建议</string>
 </resources>

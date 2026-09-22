@@ -1,6 +1,6 @@
-![Jev QQ Assist](docs/banner.jpg)
+![Jev Wingman](docs/banner.jpg)
 
-# Jev QQ Assist
+# Jev Wingman
 
 **基于 Jev 的聊天决策辅助。** 装在手机里的聊天参谋：读当前聊天窗口的文字，交给决策模型给出一组**类型化判定**——对方是不是在等你回、他想要什么、情绪多强、这句随便回会不会把事情弄糟、该用哪种策略回。
 
@@ -8,7 +8,7 @@
 
 它只给判决，不替你打字。
 
-**→ [下载 APK](https://github.com/1104480426-hash/jev-qq-assist/releases/latest)** · 装到手机上就能用，不需要电脑、不需要编译
+**→ [下载 APK](https://github.com/1104480426-hash/jev-wingman/releases/latest)** · 装到手机上就能用，不需要电脑、不需要编译
 
 <sub>English: An on-device chat co-pilot built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads whatever chat window is on screen via Android Accessibility (read-only, never sends), with no package allowlist: QQ, WeChat, Feishu, Telegram and anything else behave the same. Judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you. Grab the APK from Releases — no toolchain required.</sub>
 
@@ -91,7 +91,7 @@ noul / choice / score 三种答案 → 悬浮卡片
 
 ## 安装
 
-到 [Releases](https://github.com/1104480426-hash/jev-qq-assist/releases/latest) 下载 `jev-assist-v1.0.0.apk`，在手机上点开装上就行。**不需要电脑、不需要 Android SDK、不需要编译。**
+到 [Releases](https://github.com/1104480426-hash/jev-wingman/releases/latest) 下载 `jev-assist-v1.0.0.apk`，在手机上点开装上就行。**不需要电脑、不需要 Android SDK、不需要编译。**
 
 - Android 8.0 及以上（arm64-v8a），22.6 MB
 - **模型已经打进 APK 里**，装完离线可用
@@ -127,8 +127,8 @@ noul / choice / score 三种答案 → 悬浮卡片
 **要求**：Windows、Android SDK（build-tools 34、platform android-34）、JDK 17、Python 3。**不需要 Gradle。**
 
 ```powershell
-git clone https://github.com/1104480426-hash/jev-qq-assist.git
-cd jev-qq-assist
+git clone https://github.com/1104480426-hash/jev-wingman.git
+cd jev-wingman
 
 # 1. 拉第三方依赖（模型 + ONNX Runtime，不随仓库分发）
 powershell -ExecutionPolicy Bypass -File fetch_deps.ps1
