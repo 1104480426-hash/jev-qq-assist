@@ -14,7 +14,7 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Jev 聊天参谋"
+            android:text="Jev 僚机"
             android:textColor="#FF0E8C74"
             android:textSize="22sp"
             android:textStyle="bold" />

@@ -404,7 +404,7 @@ public class MainActivity extends Activity {
     private void openAccessibilitySettings() {
         try {
             startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-            outputView.setText("在无障碍列表里找到「Jev 聊天参谋」并打开。");
+            outputView.setText("在无障碍列表里找到「Jev 僚机 · 读取聊天内容」并打开。");
         } catch (Exception e) {
             outputView.setText("跳转无障碍设置失败：" + e.getMessage());
         }
