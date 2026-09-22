@@ -2,13 +2,15 @@
 
 # Jev QQ Assist
 
-**基于 Jev 的 QQ 聊天决策辅助。** 装在手机里的聊天参谋：读当前聊天窗口的文字，交给决策模型给出一组**类型化判定**——对方是不是在等你回、他想要什么、情绪多强、这句随便回会不会把事情弄糟、该用哪种策略回。
+**基于 Jev 的聊天决策辅助。** 装在手机里的聊天参谋：读当前聊天窗口的文字，交给决策模型给出一组**类型化判定**——对方是不是在等你回、他想要什么、情绪多强、这句随便回会不会把事情弄糟、该用哪种策略回。
+
+**不挑 App。** 读屏服务不设任何包名白名单，QQ、微信、飞书、钉钉、Telegram 都是一样的流程。名字里的 QQ 只是它出生的地方，不是它的边界。
 
 它只给判决，不替你打字。
 
 **→ [下载 APK](https://github.com/1104480426-hash/jev-qq-assist/releases/latest)** · 装到手机上就能用，不需要电脑、不需要编译
 
-<sub>English: An on-device chat co-pilot for QQ, built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads the chat window via Android Accessibility (read-only, never sends), judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you. Grab the APK from Releases — no toolchain required.</sub>
+<sub>English: An on-device chat co-pilot built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads whatever chat window is on screen via Android Accessibility (read-only, never sends), with no package allowlist: QQ, WeChat, Feishu, Telegram and anything else behave the same. Judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you. Grab the APK from Releases — no toolchain required.</sub>
 
 ---
 
@@ -67,8 +69,8 @@ Jev 官方是闭源托管服务，**不能本地部署**。它也没有一个开
 ## 工作原理
 
 ```
-QQ 聊天窗口
-   │  AccessibilityService 读取节点文本
+当前聊天窗口（QQ / 微信 / 飞书 / 任意聊天 App）
+   │  AccessibilityService 读取节点文本，不设包名白名单
    │  按气泡的屏幕横坐标推断说话人（左=对方，右=我，中间不加前缀）
    ▼
 对话转录（最近 N 行，默认 12，可调）
@@ -178,7 +180,8 @@ python tools/probe_py.py
 - **本地模式的细粒度判定会飘。** 句向量相似度对「情绪强度」这种连续量不敏感，把平静的对话误报成不快的概率不低。粗分类（是否在等回复、有无风险）相对可靠。想要质量就用远端模式。
 - **说话人靠屏幕横坐标猜。** 只在气泡左右分栏的布局下准确；居中气泡、引用回复、系统消息都会让它判断失准。
 - **判定是基于当前屏幕文本的。** 如果聊天窗口只加载了最近几条，判定就只看到这几条。
-- **只适配竖屏手机 QQ。** 其他聊天软件（微信、TIM）理论上可用，但没有做过验证。
+- **只适配竖屏聊天界面。** 说话人靠气泡的屏幕横向位置推断，左右分栏的布局（绝大多数聊天 App 都是）最准；居中气泡或引用回复会让它判断失准。
+- **不同 App 的界面结构不一样，效果会有差异。** 代码层面不挑 App，但读到的文字质量和气泡布局取决于对方怎么实现无障碍。QQ 和内置演示页是实测过的；微信、飞书这些没逐个验证过，欢迎反馈。
 - **不做历史积累。** 每次判定都是独立的一次，没有跨会话的上下文或记忆。
 
 ## 隐私
