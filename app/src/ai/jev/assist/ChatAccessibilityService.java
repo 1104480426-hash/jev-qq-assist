@@ -55,6 +55,19 @@ public class ChatAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 最近一次转录实际送进判定的行数。
+     *
+     * <p>判定结果本身看不出版本差异，但这个数字决定了那份结果值不值得信：实测只喂一句时
+     * Jev 会把有争执的对话判成「平静、闲聊」，置信度还有 0.92。渲染层拿它决定要不要照常
+     * 展示结论，见 {@link DecisionSpec#thinContextWarning(int)}。
+     */
+    private static volatile int lastTranscriptLines = 0;
+
+    public static int lastTranscriptLines() {
+        return lastTranscriptLines;
+    }
+
+    /**
      * 点悬浮球那一下抓到的内容。
      *
      * <p>被动事件永不写这三个字段。原因：用户点完球、看完判定，要切回设置页看"刚才到底读了什么"，
@@ -782,6 +795,7 @@ public class ChatAccessibilityService extends AccessibilityService {
 
         StringBuilder sb = new StringBuilder();
         String previous = null;
+        int kept = 0;
         for (int i = from; i < messages.size(); i++) {
             Message m = messages.get(i);
             if (m.text.equals(previous)) {
@@ -832,9 +846,11 @@ public class ChatAccessibilityService extends AccessibilityService {
                 sb.append('\n');
             }
             sb.append(who).append(m.text);
+            kept++;
             // 只记前缀和长度，不记正文：够判断"谁被算成了谁"，不至于把整段聊天抄进日志
             trace("T [" + who + "] len=" + m.text.length());
         }
+        lastTranscriptLines = kept;
         return sb.toString();
     }
 

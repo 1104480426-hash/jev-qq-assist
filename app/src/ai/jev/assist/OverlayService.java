@@ -443,8 +443,19 @@ public class OverlayService extends Service {
                             bodyText = DecisionSpec.plainAdvice(answers);
                             // 原始判定不再占正文，压成一行小字放在下面当依据
                             metaText = DecisionSpec.evidence(answers);
-                            pillText = DecisionSpec.plainHeadline(answers);
+                            pillText = headlineText;
                             riskHigh = DecisionSpec.isRisky(answers);
+
+                            // 上下文太短时那份结论本身就不可信，标题一并换掉。胶囊是默认
+                            // 形态，只在小字里提示等于没提示——用户看的就是这一行。
+                            String thin = DecisionSpec.thinContextWarning(
+                                    ChatAccessibilityService.lastTranscriptLines());
+                            if (thin != null) {
+                                headlineText = thin;
+                                pillText = thin;
+                                bodyText = DecisionSpec.thinContextNote() + "\n" + bodyText;
+                            }
+
                             retryable = true;
                             // 判定完成默认只留胶囊：一大块面板在聊天里太挡人
                             showPill();

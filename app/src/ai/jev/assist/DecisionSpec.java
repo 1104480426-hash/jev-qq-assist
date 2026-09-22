@@ -45,6 +45,9 @@ public final class DecisionSpec {
             "平静", "略有情绪", "明显不快", "已经很生气",
     };
 
+    /** 转录少于这么多行就认为上下文不足。 */
+    private static final int MIN_CONTEXT_LINES = 4;
+
     /**
      * 组装一次判定的请求体。
      *
@@ -403,6 +406,30 @@ public final class DecisionSpec {
         }
 
         return sb.toString();
+    }
+
+    /**
+     * 转录太短时，结论不该照常展示。
+     *
+     * <p>实测（见 docs/jev-behavior-notes.md）：只喂最后一句时，Jev 会把一段有争执的
+     * 对话判成「平静、闲聊」，置信度却高达 0.92；喂到 5 句才收敛到与完整上下文一致的
+     * 读数。上下文不足时它的错法是「自信地错」，用户从那个百分比上根本看不出来。
+     *
+     * <p>阈值取 4 是保守外推：实测点只有 1 / 2 / 5 三条，5 条已经稳定，3 和 4 没测过。
+     *
+     * @return 警示语；上下文够长时返回 null，调用方照常展示结论
+     */
+    static String thinContextWarning(int lines) {
+        if (lines <= 0 || lines >= MIN_CONTEXT_LINES) {
+            return null;
+        }
+        return "只读到 " + lines + " 条，判定不可靠";
+    }
+
+    /** 上面那句警示的展开，放在正文开头。 */
+    static String thinContextNote() {
+        return "上下文太短时它会给出一个自信但并不对的答案（实测只喂一句时置信度 0.92）。"
+                + "等对方把话说完再点一次。下面是它这次的判断，仅供参考：";
     }
 
     private static double noul(JSONObject answers, String key) {
