@@ -154,8 +154,13 @@ public class MainActivity extends Activity {
         sb.append("悬浮窗权限：").append(overlay ? "已授予" : "未授予");
         sb.append('\n').append("读屏无障碍：").append(a11y ? "已开启" : "未开启");
         sb.append('\n').append("悬浮球：").append(OverlayService.running ? "运行中" : "未运行");
-        sb.append('\n').append("判定模式：").append(
-                Prefs.isLocal(this) ? "本地（模型在手机里，不联网）" : "远端 Jev 兼容端点");
+        if (Prefs.isRemoteDegraded(this)) {
+            sb.append('\n').append("判定模式：远端未填 key，已暂用本地模型")
+                    .append('\n').append("            填上 API Key 后自动切回远端");
+        } else {
+            sb.append('\n').append("判定模式：").append(
+                    Prefs.isLocal(this) ? "本地（模型在手机里，不联网）" : "远端 Jev 兼容端点");
+        }
 
         String loadErr = LocalJudge.loadError();
         if (loadErr != null) {

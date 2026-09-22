@@ -18,23 +18,40 @@ public final class Prefs {
     /** 判定发给一个 Jev 兼容的 /v1/systemone 端点。 */
     public static final String MODE_REMOTE = "remote";
 
-    /** 远端模式的默认端点，装好后可在设置里改。 */
-    public static final String DEFAULT_ENDPOINT = "http://192.168.31.217:8890/v1/systemone";
+    /**
+     * 默认端点。指向 TypeSafe 官方：它是这批判定里质量最好的来源，
+     * 本地模型只作为没有 key 或断网时的兜底。要接自建服务在这里改。
+     */
+    public static final String DEFAULT_ENDPOINT = "https://api.typesafe.ai/v1/systemone";
     public static final String DEFAULT_MODEL = "jev-latest";
 
     private Prefs() {
     }
 
     public static String mode(Context c) {
-        return sp(c).getString(K_MODE, MODE_LOCAL);
+        return sp(c).getString(K_MODE, MODE_REMOTE);
     }
 
     public static void setMode(Context c, String v) {
         sp(c).edit().putString(K_MODE, v).apply();
     }
 
+    /**
+     * 实际是否走本地判定。
+     *
+     * <p>选了远端却还没填 key 时退回本地：否则刚装好的用户点一下只会拿到一个
+     * 鉴权错误，而设备上明明装着能用的模型。填上 key 后自动切回远端。
+     */
     public static boolean isLocal(Context c) {
+        if (MODE_REMOTE.equals(mode(c)) && apiKey(c).length() == 0) {
+            return true;
+        }
         return MODE_LOCAL.equals(mode(c));
+    }
+
+    /** 置了远端但因为没有 key 而被降级——用于在界面上说清楚发生了什么。 */
+    public static boolean isRemoteDegraded(Context c) {
+        return MODE_REMOTE.equals(mode(c)) && apiKey(c).length() == 0;
     }
 
     private static SharedPreferences sp(Context c) {
