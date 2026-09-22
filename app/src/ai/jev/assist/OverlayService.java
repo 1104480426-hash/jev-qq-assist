@@ -102,6 +102,32 @@ public class OverlayService extends Service {
         dragSlopPx = (int) (DRAG_SLOP_DP * density);
         ballSizePx = (int) (BALL_SIZE_DP * density);
         syncScreenSize();
+
+        // 球上的判定染色要知道用户什么时候离开了那个聊天窗口
+        ChatAccessibilityService.setWindowWatcher(new ChatAccessibilityService.WindowWatcher() {
+            @Override
+            public void onActivePackage(String pkg) {
+                onActivePackageChanged(pkg);
+            }
+        });
+    }
+
+    /**
+     * 活动窗口换了。
+     *
+     * <p>判定是冲着某个窗口做的，那个窗口不在前台了，球上的颜色就不再代表眼前的东西。
+     * 这比按时间淡出准：用户切走的一瞬间就该退回去，而不是等够 90 秒。
+     *
+     * <p>90 秒那个定时器仍然留着兜底——同一条聊天里换对话人，包名不变，这条路径看不见。
+     */
+    private void onActivePackageChanged(String pkg) {
+        // 拉通知栏、接电话这类系统面板不算离开聊天，别把颜色抹掉
+        if (pkg.startsWith("com.android.systemui")) {
+            return;
+        }
+        if (ballBand >= 0 && !pkg.equals(ChatAccessibilityService.pinnedPkg())) {
+            clearBallTint();
+        }
     }
 
     private void syncScreenSize() {
@@ -136,6 +162,7 @@ public class OverlayService extends Service {
         removeCard();
         removePill();
         removeBall();
+        ChatAccessibilityService.setWindowWatcher(null);
         super.onDestroy();
     }
 
@@ -288,12 +315,15 @@ public class OverlayService extends Service {
 
     /** 把染色层的浓度降到 0。渐变而不是硬切，免得球突然变色。 */
     private void fadeTintOut() {
+        if (ballBand < 0) {
+            return;     // 已经是白的，再淡一次会从绿色开始，那是错的
+        }
         final android.graphics.drawable.GradientDrawable tint = ballTintLayer();
+        final int argb = bandColor(ballBand);
+        ballBand = -1;
         if (tint == null) {
-            ballBand = -1;
             return;
         }
-        final int argb = bandColor(ballBand < 0 ? 0 : ballBand);
         android.animation.ValueAnimator va =
                 android.animation.ValueAnimator.ofInt((argb >>> 24), 0);
         va.setDuration(700);
@@ -305,7 +335,18 @@ public class OverlayService extends Service {
             }
         });
         va.start();
-        ballBand = -1;
+    }
+
+    /** 立刻把颜色退回去：判定针对的窗口已经不在前台了。 */
+    private void clearBallTint() {
+        if (ballBand < 0) {
+            return;
+        }
+        if (tintFade != null) {
+            ui.removeCallbacks(tintFade);
+            tintFade = null;
+        }
+        fadeTintOut();
     }
 
     private void clampBallInside() {

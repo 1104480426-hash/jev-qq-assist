@@ -43,6 +43,34 @@ public class ChatAccessibilityService extends AccessibilityService {
     private static volatile ChatAccessibilityService instance;
 
     /**
+     * 活动窗口换人时的通知口。OverlayService 挂上去，用来判断球上那个判定染色还作不作数。
+     *
+     * <p>用回调而不是让 OverlayService 自己轮询：窗口切换是个事件，读屏服务本来就收得到，
+     * 轮询既要定周期又会漏掉一次性的切换。
+     */
+    public interface WindowWatcher {
+        void onActivePackage(String pkg);
+    }
+
+    private static volatile WindowWatcher windowWatcher;
+
+    public static void setWindowWatcher(WindowWatcher watcher) {
+        windowWatcher = watcher;
+    }
+
+    private static void notifyActivePackage(String pkg) {
+        WindowWatcher w = windowWatcher;
+        if (w == null) {
+            return;
+        }
+        try {
+            w.onActivePackage(pkg);
+        } catch (Exception ignored) {
+            // 回调出错不该影响读屏本身
+        }
+    }
+
+    /**
      * 最近一次抓取的统计：原始多少行、过滤掉多少、识别出几条消息、几行拿到了署名。
      *
      * <p>判定不对时先看这个：是根本没抓到（原始行数太少），还是抓到了但署名没认出来。
@@ -90,6 +118,11 @@ public class ChatAccessibilityService extends AccessibilityService {
      */
     private static volatile String pinnedTranscript = "";
     private static volatile String pinnedPkg = "";
+
+    /** 上一次点球判定的来源包名。用来判断那个窗口还在不在前台。 */
+    public static String pinnedPkg() {
+        return pinnedPkg;
+    }
     private static volatile long pinnedAt = 0L;
     private static volatile String pinnedStats = "";
 
@@ -327,6 +360,11 @@ public class ChatAccessibilityService extends AccessibilityService {
             if (owner.equals(getPackageName())) {
                 return;      // 被动路径同样不抓自己的界面
             }
+
+            // 活动窗口换人了就通知外面。放在抓取之前：桌面、系统面板这类窗口常常
+            // 一行文字都抓不到，但"已经离开那个聊天"这件事此刻已经成立。
+            notifyActivePackage(owner);
+
             List<Line> lines = new ArrayList<>();
             collect(root, lines, 0);
             if (lines.isEmpty()) {
