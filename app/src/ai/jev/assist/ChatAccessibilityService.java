@@ -154,13 +154,19 @@ public class ChatAccessibilityService extends AccessibilityService {
         final String text;
         final int top;
         final int bottom;
+        final int left;
         final int centerX;
 
-        Line(String text, int top, int bottom, int centerX) {
+        Line(String text, int top, int bottom, int left, int centerX) {
             this.text = text;
             this.top = top;
             this.bottom = bottom;
+            this.left = left;
             this.centerX = centerX;
+        }
+
+        int height() {
+            return bottom - top;
         }
     }
 
@@ -178,7 +184,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 Rect r = new Rect();
                 node.getBoundsInScreen(r);
                 if (!r.isEmpty()) {
-                    out.add(new Line(value, r.top, r.bottom, r.centerX()));
+                    out.add(new Line(value, r.top, r.bottom, r.left, r.centerX()));
                 }
             }
         }
@@ -218,6 +224,92 @@ public class ChatAccessibilityService extends AccessibilityService {
         return value.matches(".*[\\p{IsHan}A-Za-z].*");
     }
 
+    /**
+     * 一条消息：谁说的 + 说了什么。
+     */
+    private static final class Message {
+        String speaker;
+        final String text;
+        final int top;
+
+        Message(String speaker, String text, int top) {
+            this.speaker = speaker;
+            this.text = text;
+            this.top = top;
+        }
+    }
+
+    /**
+     * 把扁平的文字行还原成带说话人的消息列表。
+     *
+     * <p>不能简单地两两相邻配对。实测的群聊结构里，头像那格也带文字（用户名的首字），
+     * 它的 top（475）刚好落在昵称（456）和消息（506）之间，会把这俩隔开，导致配对失败。
+     *
+     * <p>所以分两步：先剔除头像带出来的单字（它们贴在屏幕最左侧、又窄又短），
+     * 再对每条消息往上就近找一个昵称。
+     */
+    private List<Message> groupMessages(List<Line> lines, int width) {
+        int avatarBand = (int) (width * 0.13);
+
+        List<Line> kept = new ArrayList<>(lines.size());
+        for (Line l : lines) {
+            boolean avatarGlyph = l.left < avatarBand && l.text.length() <= 2;
+            if (!avatarGlyph) {
+                kept.add(l);
+            }
+        }
+
+        Set<Line> usedAsLabel = Collections.newSetFromMap(new java.util.IdentityHashMap<Line, Boolean>());
+        List<Message> out = new ArrayList<>(kept.size());
+
+        for (int i = 0; i < kept.size(); i++) {
+            Line cur = kept.get(i);
+            String speaker = "";
+            // 只看上面三条，再远就不可能是这条消息的昵称了
+            for (int j = i - 1; j >= 0 && j >= i - 3; j--) {
+                Line above = kept.get(j);
+                if (looksLikeSpeakerLabel(above, cur)) {
+                    speaker = above.text;
+                    usedAsLabel.add(above);
+                    break;
+                }
+                if (above.bottom < cur.top - 30) {
+                    break;
+                }
+            }
+            if (speaker.length() > 0) {
+                out.add(new Message(speaker, cur.text, cur.top));
+            } else if (!usedAsLabel.contains(cur)) {
+                out.add(new Message("", cur.text, cur.top));
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 判断 a 是不是 b 上面那个昵称。
+     *
+     * <p>三个条件同时成立才算：紧贴其上、更矮、够短。只用"紧贴"会误伤——两条挨得近的
+     * 短消息也会满足，所以额外要求它比下面那行矮一截、且不长于 12 个字。
+     */
+    private boolean looksLikeSpeakerLabel(Line a, Line b) {
+        if (a.height() <= 0 || b.height() <= 0) {
+            return false;
+        }
+        int gap = b.top - a.bottom;
+        if (gap < -6 || gap > 20) {
+            return false;          // 不在正上方
+        }
+        if (a.height() > b.height() * 0.72) {
+            return false;          // 昵称一定比正文矮
+        }
+        if (a.text.length() > 12) {
+            return false;          // 昵称不会很长
+        }
+        // 昵称一般不含句末标点，正文常有
+        return !a.text.matches(".*[。！？!?]$");
+    }
+
     private String buildTranscript(List<Line> lines) {
         Collections.sort(lines, new Comparator<Line>() {
             @Override
@@ -225,16 +317,24 @@ public class ChatAccessibilityService extends AccessibilityService {
                 if (a.top != b.top) {
                     return a.top < b.top ? -1 : 1;
                 }
-                return a.centerX - b.centerX;
+                return a.left - b.left;
             }
         });
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int width = dm.widthPixels;
 
-        // 分界点按当前屏幕的气泡分布现算，而不是写死屏宽百分比。
-        // 各家的气泡宽度和左右留白都不一样，固定阈值换个 App 就会把
-        // "我"和"对方"认反。算不出来时（样本太少、两簇挨得太近）退回固定值。
+        List<Message> messages = groupMessages(lines, width);
+
+        // 认出两个以上不同昵称才算群聊；否则按一对一的左右分栏处理
+        Set<String> speakers = new LinkedHashSet<>();
+        for (Message m : messages) {
+            if (m.speaker.length() > 0) {
+                speakers.add(m.speaker);
+            }
+        }
+        boolean groupChat = speakers.size() >= 2;
+
         int split = dynamicSplit(lines, width);
         boolean dynamic = split > 0;
         if (!dynamic) {
@@ -242,31 +342,43 @@ public class ChatAccessibilityService extends AccessibilityService {
         }
         int margin = Math.max(width / 20, (int) (12 * dm.density));
 
-        int linesWanted = Prefs.contextLines(this);
-        int from = Math.max(0, lines.size() - linesWanted);
+        // 位置 -> 左右归属，昵称缺失时用它兜底
+        java.util.Map<Integer, Integer> xByTop = new java.util.HashMap<>();
+        for (Line l : lines) {
+            xByTop.put(l.top, l.centerX);
+        }
+
+        int wanted = Prefs.contextLines(this);
+        int from = Math.max(0, messages.size() - wanted);
 
         StringBuilder sb = new StringBuilder();
         String previous = null;
-        for (int i = from; i < lines.size(); i++) {
-            Line line = lines.get(i);
-            if (line.text.equals(previous)) {
+        for (int i = from; i < messages.size(); i++) {
+            Message m = messages.get(i);
+            if (m.text.equals(previous)) {
                 continue;
             }
-            previous = line.text;
+            previous = m.text;
 
-            String speaker;
-            if (line.centerX < split - margin) {
-                speaker = "对方：";
-            } else if (line.centerX > split + margin) {
-                speaker = "我：";
+            String who;
+            if (groupChat && m.speaker.length() > 0) {
+                // 群聊：直接用昵称，让判定模型分得清谁是谁
+                who = m.speaker + "：";
             } else {
-                // 压在分界上的别猜，宁可不说
-                speaker = "";
+                Integer cx = xByTop.get(m.top);
+                int x = cx == null ? split : cx;
+                if (x < split - margin) {
+                    who = "对方：";
+                } else if (x > split + margin) {
+                    who = "我：";
+                } else {
+                    who = "";
+                }
             }
             if (sb.length() > 0) {
                 sb.append('\n');
             }
-            sb.append(speaker).append(line.text);
+            sb.append(who).append(m.text);
         }
         return sb.toString();
     }

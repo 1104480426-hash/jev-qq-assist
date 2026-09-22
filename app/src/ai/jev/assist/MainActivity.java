@@ -193,6 +193,14 @@ public class MainActivity extends Activity {
         } else {
             sb.append('\n').append("最近抓取：暂无（切到聊天窗口停一下再回来）");
         }
+
+        // 把实际抓到的文字摊出来。判定不对时，先看这里：是读错了窗口，
+        // 还是说话人认反了，一眼能分清，不用去猜。
+        if (captured.length() > 0) {
+            String preview = captured.length() > 240 ? captured.substring(0, 240) + " …" : captured;
+            sb.append("\n\n—— 实际读到 ——\n").append(preview);
+        }
+
         statusView.setText(sb.toString());
         toggleButton.setText(OverlayService.running ? "停止悬浮球" : "启动悬浮球");
         modeButton.setText("切换判定模式（当前："
