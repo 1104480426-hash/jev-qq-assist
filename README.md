@@ -4,7 +4,9 @@
 
 它只给判决，不替你打字。
 
-<sub>English: An on-device chat co-pilot for QQ, built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads the chat window via Android Accessibility (read-only, never sends), judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you.</sub>
+**→ [下载 APK](https://github.com/1104480426-hash/jev-qq-assist/releases/latest)** · 装到手机上就能用，不需要电脑、不需要编译
+
+<sub>English: An on-device chat co-pilot for QQ, built on Jev's "System One" idea — typed decisions with confidence instead of generated prose. Reads the chat window via Android Accessibility (read-only, never sends), judges locally with a quantized ONNX model or remotely against the real TypeSafe Jev endpoint, and shows a floating verdict card over the chat. No messages are ever sent for you. Grab the APK from Releases — no toolchain required.</sub>
 
 ---
 
@@ -79,12 +81,37 @@ noul / choice / score 三种答案 → 悬浮卡片
 
 本地模式的方法是 Jev「读 logits、不生成文本」的一个近似：**一个问题的所有候选里，语义上最贴近当前上下文的那个胜出**，softmax 给出可比较的概率。候选描述在判定前一次性全部编码并缓存，所以真正判定时只算一次上下文向量，这是它能跑进 50 ms 的原因。
 
-## 快速开始
+## 安装
 
-**要求**：Windows、Android SDK（build-tools 34、platform android-34）、JDK 17、Python 3、一台开启 USB 调试的 Android 手机。**不需要 Gradle。**
+到 [Releases](https://github.com/1104480426-hash/jev-qq-assist/releases/latest) 下载 `jev-assist-v1.0.0.apk`，在手机上点开装上就行。**不需要电脑、不需要 Android SDK、不需要编译。**
+
+- Android 8.0 及以上（arm64-v8a），22.6 MB
+- **模型已经打进 APK 里**，装完离线可用
+- 用调试密钥签名，安装时系统会提示来源不明，允许即可
+
+**装好后授权两项**（系统不允许 App 静默拿到，界面上各有一个按钮引导）：
+
+1. **悬浮窗权限** —— 需要「显示在其他应用上层」。
+2. **无障碍服务** —— 打开「Jev 聊天参谋」，用于读取聊天窗口文字。它只读：不注入输入、不点击发送、不代发任何消息。
+
+想先确认装好了没有，点「查看演示模式」：它用一段内置的虚构对话把整条链路跑一遍，不碰任何真实聊天记录，也方便自己截图发帖。
+
+**默认走远端**（TypeSafe 官方端点），因为它的判定质量明显更好。没填 API Key 时会自动降级用手机里的本地模型，填上之后自动切回远端——所以刚装好、手上没有 key，也能立刻试。API Key 只写进设备的 SharedPreferences，不进源码、不进仓库。
+
+然后切到聊天窗口停一下，点悬浮球，卡片给出判定。
+
+卡片是照着「边聊边看」调的：**默认落在屏幕上方**（最新消息在底部，压住它最难受），按住顶部那一条可以拖走，位置会记住，**点卡片外面就收起**。球拖到哪就停在哪，松手会自动吸到最近的侧边，不会赖在聊天区中间挡字。判定在跑的时候标题会动，因为本地模型首次加载要几秒。
+
+判定结果可以点「复制」拿走。API Key 不会回填到设置界面上——那个页面很容易被截图，字段留空即表示沿用已保存的值。
+
+## 从源码构建
+
+想改判定描述、换模型或自己接一个后端时用这条路。
+
+**要求**：Windows、Android SDK（build-tools 34、platform android-34）、JDK 17、Python 3。**不需要 Gradle。**
 
 ```powershell
-git clone https://github.com/<your-name>/jev-qq-assist.git
+git clone https://github.com/1104480426-hash/jev-qq-assist.git
 cd jev-qq-assist
 
 # 1. 拉第三方依赖（模型 + ONNX Runtime，不随仓库分发）
@@ -97,21 +124,6 @@ powershell -ExecutionPolicy Bypass -File build.ps1 -Clean -Install
 ```
 
 SDK / JDK 不在默认位置时：`build.ps1 -Sdk <path> -Jdk <path>`，或设置 `ANDROID_HOME` / `JAVA_HOME`。
-
-**装好之后要授权两项**（系统不允许静默授予，App 内有引导按钮）：
-
-1. **悬浮窗权限** —— 需要「显示在其他应用上层」。
-2. **无障碍服务** —— 打开「Jev 聊天参谋」，用于读取聊天窗口文字。
-
-想先确认装好了没有，点「查看演示模式」：它用一段内置的虚构对话把整条链路跑一遍，不碰任何真实聊天记录，也方便自己截图发帖。
-
-**默认走远端**（TypeSafe 官方端点），因为它的判定质量明显更好。没填 API Key 时会自动降级用手机里的本地模型，填上之后自动切回远端——所以刚装好、手上没有 key，也能立刻试。API Key 只写进设备的 SharedPreferences，不进源码、不进仓库。
-
-然后切到聊天窗口停一下，点悬浮球，卡片给出判定。
-
-卡片是照着「边聊边看」调的：**默认落在屏幕上方**（最新消息在底部，压住它最难受），按住顶部那一条可以拖走，位置会记住，**点卡片外面就收起**。球拖到哪就停在哪，松手会自动吸到最近的侧边，不会赖在聊天区中间挡字。判定在跑的时候标题会动，因为本地模型首次加载要几秒。
-
-判定结果可以点「复制」拿走。API Key 不会回填到设置界面上——那个页面很容易被截图，字段留空即表示沿用已保存的值。
 
 ## 判定集
 
