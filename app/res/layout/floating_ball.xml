@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- 白玻璃珠上用深色字，和 iOS 白色按钮一致。纯白字在白球上看不见。 -->
 <TextView xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/ball"
     android:layout_width="48dp"
@@ -7,10 +8,6 @@
     android:gravity="center"
     android:letterSpacing="0.02"
     android:text="J"
-    android:textColor="#FFFFFFFF"
+    android:textColor="#D91C1C1E"
     android:textSize="20sp"
-    android:textStyle="bold"
-    android:shadowColor="#40000000"
-    android:shadowDx="0"
-    android:shadowDy="1"
-    android:shadowRadius="2" />
+    android:textStyle="bold" />

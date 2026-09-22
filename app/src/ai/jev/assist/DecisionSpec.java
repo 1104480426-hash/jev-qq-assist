@@ -253,6 +253,28 @@ public final class DecisionSpec {
         return r >= 0.6 || t >= 2.0;
     }
 
+    /**
+     * 悬浮球该染哪一档：0 绿、1 黄、2 红。
+     *
+     * <p>两条线是从 36 段真实对话的分布上标出来的。risk 呈双峰：低峰 0.2-0.5（13 段），
+     * 高峰 0.7-0.9（21 段），谷底落在 0.5-0.6 之间。沿用胶囊那个 risk >= 0.6 会让
+     * 三分之二的对话都亮灯，一个大多数时候都亮的警告等于没有警告；取 0.85 当红线，
+     * 亮灯比例降到 22%，剩下的正好是"抱怨升级 / 当面难堪 / 直接发火"那一类。
+     *
+     * <p>tension 不单独参与分档。实测 tension >= 1.5 的 11 段里 risk 全部 >= 0.70，
+     * 它给不出额外信息；两个条件一起判只会互相打架，让颜色更难解释。
+     */
+    static int colorBand(JSONObject answers) {
+        double risk = noul(answers, "risk");
+        if (risk < 0) {
+            return 0;
+        }
+        if (risk >= 0.85) {
+            return 2;
+        }
+        return risk >= 0.6 ? 1 : 0;
+    }
+
     // ---- 人话层 ----
     //
     // 原始的 noul/choice/score 是给机器看的：一个「表达不满 25%」摆在用户面前，

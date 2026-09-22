@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  悬浮球：iOS 质感的玻璃珠。
-  自上而下的受光渐变做出球体，左上角一小块高光当镜面反射，
-  外圈那一道偏亮的描边是玻璃的折射边。整体比深色版本更亮、更干净。
+  悬浮球：白色透明的玻璃珠，判定结果染在上面。
+
+  珠体本身是白的，平时就是一颗白玻璃珠；判定给出结果时把颜色刷进 ball_tint 那一层，
+  绿色表示可以放心回，黄色表示要留神，红色表示这条很危险。染色层平时是全透明的，
+  所以没判定过的时候它就是白的。
+
+  受光渐变和高光都留白，不做成彩色渐变——一旦珠体本身带饱和度，就不再是玻璃，
+  而是一颗彩球了。
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!-- 落在桌面上的柔和投影 -->
-    <item android:top="1.5dp">
+    <item android:top="2dp">
         <shape android:shape="oval">
-            <solid android:color="#24000000" />
+            <solid android:color="#40000000" />
         </shape>
     </item>
 
-    <!-- 珠体 -->
+    <!-- 珠体：白色玻璃。靠不透明度的渐变做出球体的厚度 -->
     <item android:bottom="1.5dp">
         <shape android:shape="oval">
             <gradient
@@ -21,9 +26,17 @@
                 android:gradientRadius="72%p"
                 android:centerX="0.36"
                 android:centerY="0.30"
-                android:startColor="#FF6FE3C6"
-                android:centerColor="#FF2BC4A0"
-                android:endColor="#FF0C6B58" />
+                android:startColor="#FFFFFFFF"
+                android:centerColor="#E6FFFFFF"
+                android:endColor="#B3FFFFFF" />
+        </shape>
+    </item>
+
+    <!-- 判定结果的染色层。代码用 findDrawableByLayerId 拿到它改颜色，
+         用 setLayerAlpha 控制浓度，所以它能淡入淡出。 -->
+    <item android:id="@+id/ball_tint" android:bottom="1.5dp">
+        <shape android:shape="oval">
+            <solid android:color="#00000000" />
         </shape>
     </item>
 
@@ -32,17 +45,19 @@
         <shape android:shape="oval">
             <gradient
                 android:angle="270"
-                android:startColor="#59FFFFFF"
-                android:centerColor="#0FFFFFFF"
+                android:startColor="#66FFFFFF"
+                android:centerColor="#1AFFFFFF"
                 android:endColor="#00FFFFFF"
                 android:type="linear" />
         </shape>
     </item>
 
-    <!-- 折射边 -->
+    <!-- 轮廓。这一版是深色的：白色玻璃球落在浅色聊天背景（#f2f2f7）上没有
+         深色边就完全立不住，实测只剩一个 J 字浮在那儿。原来的白色亮边在浅背景
+         上等于没画。 -->
     <item android:bottom="1.5dp">
         <shape android:shape="oval">
-            <stroke android:width="0.75dp" android:color="#8CFFFFFF" />
+            <stroke android:width="0.9dp" android:color="#33000000" />
         </shape>
     </item>
 </layer-list>

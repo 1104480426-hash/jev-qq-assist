@@ -214,7 +214,98 @@ public class OverlayService extends Service {
         } catch (Exception e) {
             // 悬浮窗权限被拒时会走到这里
             stopSelf();
+            return;
         }
+        paintBall();
+    }
+
+    // ---- 球上的判定结果染色 ----
+    //
+    // 球一直在屏幕上，所以它比胶囊上那个点更值得承载结论：不展开也能看见。
+    // 但判定是有时效的——切到别的聊天、过几分钟，这个颜色就不再代表眼前这段。
+    // 所以它自己会淡掉，退回白玻璃。宁可少提示，也不要给一个过期的警告。
+
+    /** 当前该染的档位：0 绿、1 黄、2 红、-1 未判定。 */
+    private int ballBand = -1;
+    /** 染色保持多久，之后淡回白。 */
+    private static final long TINT_HOLD_MS = 90_000L;
+    private Runnable tintFade;
+
+    /** 把 ballBand 画到球上。球每次重建都要重新调用，因为背景是新 inflate 的。 */
+    private void paintBall() {
+        android.graphics.drawable.GradientDrawable tint = ballTintLayer();
+        if (tint == null) {
+            return;
+        }
+        tint.setColor(ballBand < 0 ? 0x00000000 : bandColor(ballBand));
+    }
+
+    private android.graphics.drawable.GradientDrawable ballTintLayer() {
+        if (ballView == null) {
+            return null;
+        }
+        android.graphics.drawable.Drawable bg = ballView.getBackground();
+        if (!(bg instanceof android.graphics.drawable.LayerDrawable)) {
+            return null;
+        }
+        android.graphics.drawable.Drawable layer =
+                ((android.graphics.drawable.LayerDrawable) bg.mutate())
+                        .findDrawableByLayerId(R.id.ball_tint);
+        return layer instanceof android.graphics.drawable.GradientDrawable
+                ? (android.graphics.drawable.GradientDrawable) layer
+                : null;
+    }
+
+    /** 低饱和的染色，浓度压在六成左右：白色珠体透出来才像玻璃，不是一颗彩球。 */
+    private static int bandColor(int band) {
+        switch (band) {
+            case 2:
+                return 0xA6E05A4A;
+            case 1:
+                return 0xA6E0A93C;
+            default:
+                return 0xA62BC4A0;
+        }
+    }
+
+    /** 判定出结果时调用：染色，并安排它在 TINT_HOLD_MS 之后淡掉。 */
+    private void tintBall(int band) {
+        ballBand = band;
+        if (tintFade != null) {
+            ui.removeCallbacks(tintFade);
+            tintFade = null;
+        }
+        paintBall();
+
+        tintFade = new Runnable() {
+            @Override
+            public void run() {
+                fadeTintOut();
+            }
+        };
+        ui.postDelayed(tintFade, TINT_HOLD_MS);
+    }
+
+    /** 把染色层的浓度降到 0。渐变而不是硬切，免得球突然变色。 */
+    private void fadeTintOut() {
+        final android.graphics.drawable.GradientDrawable tint = ballTintLayer();
+        if (tint == null) {
+            ballBand = -1;
+            return;
+        }
+        final int argb = bandColor(ballBand < 0 ? 0 : ballBand);
+        android.animation.ValueAnimator va =
+                android.animation.ValueAnimator.ofInt((argb >>> 24), 0);
+        va.setDuration(700);
+        va.addUpdateListener(new android.animation.ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(android.animation.ValueAnimator a) {
+                int alpha = (int) a.getAnimatedValue();
+                tint.setColor((alpha << 24) | (argb & 0x00FFFFFF));
+            }
+        });
+        va.start();
+        ballBand = -1;
     }
 
     private void clampBallInside() {
@@ -472,6 +563,8 @@ public class OverlayService extends Service {
                             }
 
                             retryable = true;
+                            // 结论同时染到球上：球一直看得见，不用展开就知道这条要不要小心
+                            tintBall(DecisionSpec.colorBand(answers));
                             // 判定完成默认只留胶囊：一大块面板在聊天里太挡人
                             showPill();
                         }
