@@ -118,16 +118,25 @@ public class OverlayService extends Service {
      * <p>判定是冲着某个窗口做的，那个窗口不在前台了，球上的颜色就不再代表眼前的东西。
      * 这比按时间淡出准：用户切走的一瞬间就该退回去，而不是等够 90 秒。
      *
+     * <p>胶囊和卡片一起收掉。球、胶囊、卡片都是关于那一个窗口的，只让球变白、把结论
+     * 留在别的 App 上，等于说"这个结论还作数"——那才是自相矛盾。
+     *
      * <p>90 秒那个定时器仍然留着兜底——同一条聊天里换对话人，包名不变，这条路径看不见。
      */
     private void onActivePackageChanged(String pkg) {
-        // 拉通知栏、接电话这类系统面板不算离开聊天，别把颜色抹掉
+        // 拉通知栏、接电话这类系统面板不算离开聊天，别把东西全抹掉
         if (pkg.startsWith("com.android.systemui")) {
             return;
         }
-        if (ballBand >= 0 && !pkg.equals(ChatAccessibilityService.pinnedPkg())) {
-            clearBallTint();
+        if (pkg.equals(ChatAccessibilityService.pinnedPkg())) {
+            return;     // 还在判定过的那条聊天里
         }
+
+        clearBallTint();
+        // 判定还在跑的时候切走，迟到的结果也不该再弹出来
+        dismissed = true;
+        removePill();
+        removeCard();
     }
 
     private void syncScreenSize() {
