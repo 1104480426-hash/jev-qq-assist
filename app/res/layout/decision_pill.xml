@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  判定胶囊：判定完成后默认就留这一条，贴着悬浮球显示。
+  一行摘要，约 50dp 高，目的就是尽量不挡聊天文本。
+  点它才展开成完整卡片。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/pill_root"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_pill"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingLeft="12dp"
+    android:paddingRight="11dp"
+    android:paddingTop="9dp"
+    android:paddingBottom="9dp">
+
+    <View
+        android:id="@+id/pill_dot"
+        android:layout_width="7dp"
+        android:layout_height="7dp"
+        android:background="@drawable/bg_pill_dot" />
+
+    <TextView
+        android:id="@+id/pill_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text=""
+        android:textColor="#FF1C1C1E"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/pill_expand"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginLeft="9dp"
+        android:text="展开"
+        android:textColor="#FF0E8C74"
+        android:textSize="12sp" />
+</LinearLayout>

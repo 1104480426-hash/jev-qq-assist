@@ -11,6 +11,7 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.os.Handler;
 import android.os.IBinder;
@@ -21,7 +22,6 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
 import android.view.animation.DecelerateInterpolator;
-import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -32,8 +32,9 @@ import org.json.JSONObject;
  *
  * <p>它只读不写：不注入文本、不点发送。决策给你，动作你自己做。
  *
- * <p>交互上按聊天场景调过几轮：球松手吸附到最近的侧边并且位置会记住，卡片默认落在
- * 屏幕上方（最新消息在底部，压住它最难受）、可以拖、点卡片外面就收起。
+ * <p>结果分两级显示。判定完成后**默认只留一条贴着悬浮球的胶囊**（一行摘要，约 50dp），
+ * 因为聊天时最挡人的就是一大块居中面板。点胶囊才展开成完整卡片。
+ * 交互闭环：球 = 开/关，胶囊 = 摘要，卡片 = 详情。
  */
 public class OverlayService extends Service {
 
@@ -48,12 +49,16 @@ public class OverlayService extends Service {
     private static final int DRAG_SLOP_DP = 6;
     private static final int EDGE_MARGIN_DP = 6;
     private static final int BALL_SIZE_DP = 52;
+    private static final int PILL_GAP_DP = 7;
+    private static final int PILL_MAX_WIDTH_DP = 236;
 
     private WindowManager windowManager;
     private View ballView;
     private View cardView;
+    private View pillView;
     private WindowManager.LayoutParams ballParams;
     private WindowManager.LayoutParams cardParams;
+    private WindowManager.LayoutParams pillParams;
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int dragSlopPx;
@@ -62,14 +67,18 @@ public class OverlayService extends Service {
     private int screenH;
     private float density;
 
-    /** 判定进行中的点点动画，避免首次加载模型时看着像卡死。 */
     private Runnable progressTick;
     private int progressDots;
 
-    private String cardHeadline = "";
-    private String cardBody = "";
+    // 当前这次判定的内容，胶囊和卡片两种形态之间来回切换时要用
+    private String headlineText = "";
+    private String bodyText = "";
+    private String metaText = "";
+    private String pillText = "";
+    private boolean riskHigh = false;
+    private boolean retryable = false;
 
-    /** 判定期间用户主动收起了卡片：迟到的结果不该再弹回来。 */
+    /** 判定期间用户主动关掉了：迟到的结果不该再弹回来。 */
     private boolean dismissed = false;
     /** 请求序号，避免旧请求的结果盖掉新请求的。 */
     private int requestSeq = 0;
@@ -114,6 +123,7 @@ public class OverlayService extends Service {
         running = false;
         stopProgress();
         removeCard();
+        removePill();
         removeBall();
         super.onDestroy();
     }
@@ -182,7 +192,6 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT);
         ballParams.gravity = Gravity.TOP | Gravity.START;
 
-        // 位置按比例还原，转屏换分辨率后仍落在原来那一侧
         ballParams.x = (int) (Prefs.ballX(this) * screenW);
         ballParams.y = (int) (Prefs.ballY(this) * screenH);
         clampBallInside();
@@ -202,7 +211,6 @@ public class OverlayService extends Service {
         ballParams.y = Math.max(0, Math.min(screenH - ballSizePx, ballParams.y));
     }
 
-    /** 拖动悬浮球；位移小于阈值算点击，松手吸附到最近的侧边。 */
     private final class BallTouchListener implements View.OnTouchListener {
         private int startX;
         private int startY;
@@ -231,6 +239,10 @@ public class OverlayService extends Service {
                     ballParams.y = startY + dy;
                     clampBallInside();
                     moveView(ballView, ballParams);
+                    // 胶囊贴着球，球一动它跟着动
+                    if (pillView != null) {
+                        layoutPill();
+                    }
                     return true;
                 }
                 case MotionEvent.ACTION_UP:
@@ -256,7 +268,6 @@ public class OverlayService extends Service {
         commitBallPosition(targetX, ballParams.y);
     }
 
-    /** 把球移到目标位置并落盘。用一段很短的横向动画，比瞬移自然。 */
     private void commitBallPosition(final int targetX, final int targetY) {
         final int fromX = ballParams.x;
         if (fromX == targetX) {
@@ -274,6 +285,9 @@ public class OverlayService extends Service {
                 ballParams.x = (int) animation.getAnimatedValue();
                 ballParams.y = targetY;
                 moveView(ballView, ballParams);
+                if (pillView != null) {
+                    layoutPill();
+                }
             }
         });
         anim.start();
@@ -302,26 +316,36 @@ public class OverlayService extends Service {
     // ---- 判定 ----
 
     private void onBallTap() {
-        // 卡片开着就收起。因为不能开 FLAG_WATCH_OUTSIDE_TOUCH（会让模糊铺满全屏），
-        // 就用同一个球来切换显示状态，和 iOS 的辅助触控一个逻辑。
-        if (cardView != null) {
+        // 有结果（胶囊或卡片）就全部收掉，再点一次重新判定。
+        // 因为不能开 FLAG_WATCH_OUTSIDE_TOUCH（会把窗口表面撑到全屏），
+        // 显示状态就统一由悬浮球切换，和 iOS 的辅助触控一个逻辑。
+        if (cardView != null || pillView != null) {
             dismissed = true;
             removeCard();
+            removePill();
             return;
         }
         dismissed = false;
 
         String transcript = ChatAccessibilityService.cachedTranscript();
         if (transcript.length() == 0) {
-            showCard("还没抓到聊天内容",
-                    "先在设置里开启「Jev 聊天参谋」无障碍服务，然后切到聊天窗口停一下，再点我。",
-                    "", false);
+            headlineText = "还没抓到聊天内容";
+            bodyText = "先在设置里开启「Jev 聊天参谋」无障碍服务，然后切到聊天窗口停一下，再点我。";
+            metaText = "";
+            pillText = "还没抓到聊天内容";
+            riskHigh = false;
+            retryable = false;
+            showCard();
             return;
         }
         String hint = Prefs.isLocal(this)
                 ? "已取最近 " + Prefs.contextLines(this) + " 行对话，本地模型判定中（首次会加载模型，稍慢）"
                 : "已取最近 " + Prefs.contextLines(this) + " 行对话，正在问远端判定端点。";
-        showCard("正在判定", hint, "", false);
+        headlineText = "正在判定";
+        bodyText = hint;
+        metaText = "";
+        retryable = false;
+        showCard();
         startProgress();
         ask(transcript);
     }
@@ -355,7 +379,13 @@ public class OverlayService extends Service {
                                     if (seq != requestSeq || dismissed) {
                                         return;
                                     }
-                                    showCard("判定失败", err, "端点 " + endpoint, false);
+                                    headlineText = "判定失败";
+                                    bodyText = err;
+                                    metaText = "端点 " + endpoint;
+                                    pillText = "判定失败";
+                                    riskHigh = true;
+                                    retryable = false;
+                                    showCard();
                                 }
                             });
                             return;
@@ -366,12 +396,17 @@ public class OverlayService extends Service {
                     ui.post(new Runnable() {
                         @Override
                         public void run() {
-                            // 用户中途收起了卡片，就别再弹回来
                             if (seq != requestSeq || dismissed) {
                                 return;
                             }
-                            showCard(DecisionSpec.headline(answers),
-                                    DecisionSpec.renderAll(answers), meta, true);
+                            headlineText = DecisionSpec.headline(answers);
+                            bodyText = DecisionSpec.renderAll(answers);
+                            metaText = meta;
+                            pillText = DecisionSpec.pillSummary(answers);
+                            riskHigh = DecisionSpec.isRisky(answers);
+                            retryable = true;
+                            // 判定完成默认只留胶囊：一大块面板在聊天里太挡人
+                            showPill();
                         }
                     });
                 } catch (final Exception e) {
@@ -381,8 +416,13 @@ public class OverlayService extends Service {
                             if (seq != requestSeq || dismissed) {
                                 return;
                             }
-                            showCard("本地判定失败", String.valueOf(e.getMessage()),
-                                    "本地模型未能加载，可在设置里看具体原因。", false);
+                            headlineText = "本地判定失败";
+                            bodyText = String.valueOf(e.getMessage());
+                            metaText = "本地模型未能加载，可在设置里看具体原因。";
+                            pillText = "本地判定失败";
+                            riskHigh = true;
+                            retryable = false;
+                            showCard();
                         }
                     });
                 }
@@ -390,30 +430,114 @@ public class OverlayService extends Service {
         }, "jev-decide").start();
     }
 
-    // ---- 卡片 ----
+    // ---- 胶囊：结果默认形态 ----
 
-    private void showCard(String headline, String body, String meta, final boolean retryable) {
+    private void showPill() {
         stopProgress();
         removeCard();
+        removePill();
 
-        cardHeadline = headline;
-        cardBody = body;
+        pillView = LayoutInflater.from(this).inflate(R.layout.decision_pill, null);
+        ((TextView) pillView.findViewById(R.id.pill_text)).setText(pillText);
 
-        cardView = LayoutInflater.from(this).inflate(R.layout.decision_card, null);
-        ((TextView) cardView.findViewById(R.id.card_headline)).setText(headline);
-        ((TextView) cardView.findViewById(R.id.card_body)).setText(body);
-        ((TextView) cardView.findViewById(R.id.card_meta)).setText(meta);
+        // 风险高的时候点变橙，扫一眼就知道这条要不要认真对待
+        View dot = pillView.findViewById(R.id.pill_dot);
+        if (dot != null && dot.getBackground() instanceof GradientDrawable) {
+            GradientDrawable shape = (GradientDrawable) dot.getBackground().mutate();
+            shape.setColor(riskHigh ? 0xFFE08A3C : 0xFF2BC4A0);
+        }
 
         int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
-        // 固定宽度；高度交给 AT_MOST 测量，卡片本身是 LinearLayout，能正确撑开。
-        int cardWidth = (int) (280 * density);
+        int maxW = (int) (PILL_MAX_WIDTH_DP * density);
+        pillParams = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT);
+        pillParams.gravity = Gravity.TOP | Gravity.START;
+
+        pillView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                removePill();
+                showCard();
+            }
+        });
+
+        try {
+            windowManager.addView(pillView, pillParams);
+        } catch (Exception e) {
+            pillView = null;
+            return;
+        }
+
+        // 加进去之后才知道它多宽，这时才能把它摆在球旁边
+        pillView.measure(
+                View.MeasureSpec.makeMeasureSpec(maxW, View.MeasureSpec.AT_MOST),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        layoutPill();
+    }
+
+    /** 胶囊贴着球放：球在左半屏就摆到球右边，反之摆左边，垂直与球齐平。 */
+    private void layoutPill() {
+        if (pillView == null || pillParams == null || ballView == null) {
+            return;
+        }
+        int gap = (int) (PILL_GAP_DP * density);
+        int pillW = pillView.getMeasuredWidth() > 0
+                ? pillView.getMeasuredWidth()
+                : (int) (150 * density);
+        int pillH = pillView.getMeasuredHeight() > 0
+                ? pillView.getMeasuredHeight()
+                : (int) (44 * density);
+
+        boolean ballOnLeft = ballParams.x + ballSizePx / 2 < screenW / 2;
+        int x = ballOnLeft
+                ? ballParams.x + ballSizePx + gap
+                : ballParams.x - pillW - gap;
+        int y = ballParams.y + (ballSizePx - pillH) / 2;
+
+        pillParams.x = Math.max(0, Math.min(screenW - pillW, x));
+        pillParams.y = Math.max(0, Math.min(screenH - pillH, y));
+        moveView(pillView, pillParams);
+    }
+
+    private void removePill() {
+        if (pillView != null && windowManager != null) {
+            try {
+                windowManager.removeView(pillView);
+            } catch (Exception ignored) {
+                // 已移除
+            }
+            pillView = null;
+        }
+    }
+
+    // ---- 卡片：点开胶囊才出现的详情 ----
+
+    private void showCard() {
+        stopProgress();
+        removeCard();
+
+        cardView = LayoutInflater.from(this).inflate(R.layout.decision_card, null);
+        ((TextView) cardView.findViewById(R.id.card_headline)).setText(headlineText);
+        ((TextView) cardView.findViewById(R.id.card_body)).setText(bodyText);
+        ((TextView) cardView.findViewById(R.id.card_meta)).setText(metaText);
+
+        int type = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+
         // 这里刻意不用 FLAG_BLUR_BEHIND。实测在 HyperOS 上它的作用范围不稳定：
         // 同样的窗口参数（局部 735x601、blurBehindRadius=47），有时只糊卡片背后，
         // 有时把整个屏幕都糊掉，聊天界面就读不了了。一个会偶发毁掉主场景的效果不值当，
-        // 所以玻璃质感全部由 bg_card 的分层来出。相关排查留在 commit 记录里。
+        // 所以玻璃质感全部由 bg_card 的分层来出。
+        int cardWidth = (int) (280 * density);
         cardParams = new WindowManager.LayoutParams(
                 cardWidth,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -422,7 +546,6 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT);
         cardParams.gravity = Gravity.TOP | Gravity.START;
 
-        // 默认落在屏幕上方：聊天窗口的最新消息在底部，压住它最难受
         cardParams.x = (int) (Prefs.cardX(this) * screenW) - cardWidth / 2;
         cardParams.y = (int) (Prefs.cardY(this) * screenH);
         clampCardInside(cardWidth);
@@ -433,7 +556,13 @@ public class OverlayService extends Service {
         cardView.findViewById(R.id.card_close).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                removeCard();
+                // 有结果就退回胶囊，纯错误信息才整个关掉
+                if (retryable) {
+                    removeCard();
+                    showPill();
+                } else {
+                    removeCard();
+                }
             }
         });
         cardView.findViewById(R.id.card_copy).setOnClickListener(new View.OnClickListener() {
@@ -463,7 +592,6 @@ public class OverlayService extends Service {
         cardParams.y = Math.max(0, Math.min(screenH - (int) (120 * density), cardParams.y));
     }
 
-    /** 按住卡片顶部那一条拖动，松手记住位置。 */
     private final class CardDragListener implements View.OnTouchListener {
         private final int cardWidth;
         private int startX;
@@ -520,8 +648,7 @@ public class OverlayService extends Service {
             if (cm == null) {
                 return;
             }
-            String text = cardHeadline + "\n" + cardBody;
-            cm.setPrimaryClip(ClipData.newPlainText("jev", text));
+            cm.setPrimaryClip(ClipData.newPlainText("jev", headlineText + "\n" + bodyText));
             toast("已复制");
         } catch (Exception e) {
             toast("复制失败");

@@ -200,6 +200,57 @@ public final class DecisionSpec {
         return "建议：" + s + mood;
     }
 
+    /**
+     * 胶囊上那一行摘要：策略 + 情绪 + 风险百分比。
+     * 比 headline 再短一档，因为它要贴在悬浮球旁边，占屏越小越好。
+     */
+    static String pillSummary(JSONObject answers) {
+        StringBuilder sb = new StringBuilder();
+
+        JSONObject strategy = answers.optJSONObject("strategy");
+        if (strategy != null) {
+            String choice = strategy.optString("choice", "");
+            if (choice.length() > 0) {
+                sb.append(zhValue(choice));
+            }
+        }
+
+        JSONObject tension = answers.optJSONObject("tension");
+        if (tension != null) {
+            double score = tension.optDouble("score", -1);
+            if (score >= 0) {
+                int idx = (int) Math.round(score);
+                idx = Math.max(0, Math.min(SCORE_LEGEND.length - 1, idx));
+                if (sb.length() > 0) {
+                    sb.append(" · ");
+                }
+                sb.append(SCORE_LEGEND[idx]);
+            }
+        }
+
+        JSONObject risk = answers.optJSONObject("risk");
+        if (risk != null) {
+            double p = risk.optDouble("noul", -1);
+            if (p >= 0) {
+                if (sb.length() > 0) {
+                    sb.append(" · ");
+                }
+                sb.append("风险 ").append(Math.round(p * 100)).append('%');
+            }
+        }
+
+        return sb.length() > 0 ? sb.toString() : "判定完成";
+    }
+
+    /** 语气重不重：决定胶囊上那个点是青的还是橙的。 */
+    static boolean isRisky(JSONObject answers) {
+        JSONObject risk = answers.optJSONObject("risk");
+        JSONObject tension = answers.optJSONObject("tension");
+        double r = risk == null ? 0 : risk.optDouble("noul", 0);
+        double t = tension == null ? 0 : tension.optDouble("score", 0);
+        return r >= 0.6 || t >= 2.0;
+    }
+
     private static String zh(String key) {
         for (String[] pair : LABELS) {
             if (pair[0].equals(key)) {
