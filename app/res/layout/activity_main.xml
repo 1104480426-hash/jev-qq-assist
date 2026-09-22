@@ -142,6 +142,16 @@
             android:textColor="#FFE6E9EC" />
 
         <Button
+            android:id="@+id/demo"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#222BC4A0"
+            android:text="查看演示模式（虚构对话）"
+            android:textAllCaps="false"
+            android:textColor="#FF2BC4A0" />
+
+        <Button
             android:id="@+id/mode"
             android:layout_width="match_parent"
             android:layout_height="46dp"

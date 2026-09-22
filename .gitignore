@@ -16,3 +16,7 @@ libs/
 # tokenizer cross-check artifacts
 tools/probe_java.txt
 tools/probe_py.txt
+
+# keep the bundled demo page (only the model dir is fetched)
+!app/assets/demo-chat.html
+

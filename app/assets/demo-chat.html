@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f2f7">
+<title>聊天示例（虚构内容，仅用于截图）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f2f2f7;
+    font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0;
+    background: rgba(242, 242, 247, .96);
+    border-bottom: 1px solid #e3e3e8;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 50%;
+    background: linear-gradient(135deg, #8fd3c7, #4aa79a);
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; font-weight: 600;
+  }
+  .who .name { font-weight: 600; font-size: 17px; color: #111; }
+  .who .sub { font-size: 12px; color: #8a8a8e; margin-top: 1px; }
+  .thread { padding: 14px 14px 48px; display: flex; flex-direction: column; gap: 11px; }
+  .day { text-align: center; font-size: 12px; color: #8a8a8e; margin: 8px 0 2px; }
+  .row { display: flex; }
+  .row.me { justify-content: flex-end; }
+  .bubble {
+    max-width: 76%; padding: 10px 14px; border-radius: 18px;
+    font-size: 16.5px; line-height: 1.45; word-break: break-word;
+  }
+  .them .bubble { background: #fff; color: #111; border-bottom-left-radius: 5px; }
+  .me   .bubble { background: #0a84ff; color: #fff; border-bottom-right-radius: 5px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="avatar">林</div>
+    <div class="who">
+      <div class="name">小林</div>
+      <div class="sub">在线</div>
+    </div>
+  </header>
+
+  <div class="thread">
+    <div class="day">昨天 21:04</div>
+    <div class="row them"><div class="bubble">周五那个局你来不来</div></div>
+    <div class="row me"><div class="bubble">看情况吧</div></div>
+    <div class="row them"><div class="bubble">你每次都这样</div></div>
+    <div class="row them"><div class="bubble">算了当我没问</div></div>
+
+    <div class="day">今天 09:41</div>
+    <div class="row them"><div class="bubble">刚看你在群里挺活跃的</div></div>
+  </div>
+</body>
+</html>

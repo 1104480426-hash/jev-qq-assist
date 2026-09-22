@@ -63,6 +63,13 @@ public class MainActivity extends Activity {
             }
         });
 
+        findViewById(R.id.demo).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent(MainActivity.this, DemoActivity.class));
+            }
+        });
+
         modeButton = (Button) findViewById(R.id.mode);
         modeButton.setOnClickListener(new View.OnClickListener() {
             @Override

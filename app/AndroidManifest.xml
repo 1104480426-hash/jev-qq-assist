@@ -31,6 +31,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="ai.jev.assist.DemoActivity"
+            android:exported="false"
+            android:label="@string/demo_label" />
+
         <service
             android:name="ai.jev.assist.OverlayService"
             android:exported="false"
