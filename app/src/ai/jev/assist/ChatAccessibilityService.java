@@ -68,6 +68,19 @@ public class ChatAccessibilityService extends AccessibilityService {
     }
 
     /**
+     * 最近一次转录的构成摘要，形如「读到 11 条 · 对方 7 · 我 4」。
+     *
+     * <p>这是用户唯一能当场发现「读错了」的线索：结论本身看不出输入对不对，措辞总是通顺的；
+     * 而设置页里那份完整转录要切走才能看，只有起了疑心的人才会去翻。只报结构不报内容，
+     * 拼法见 {@link #reading}。
+     */
+    private static volatile String lastReading = "";
+
+    public static String lastReading() {
+        return lastReading;
+    }
+
+    /**
      * 点悬浮球那一下抓到的内容。
      *
      * <p>被动事件永不写这三个字段。原因：用户点完球、看完判定，要切回设置页看"刚才到底读了什么"，
@@ -796,6 +809,11 @@ public class ChatAccessibilityService extends AccessibilityService {
         StringBuilder sb = new StringBuilder();
         String previous = null;
         int kept = 0;
+        int named = 0;
+        int mine = 0;
+        int other = 0;
+        int notice = 0;
+        int lost = 0;
         for (int i = from; i < messages.size(); i++) {
             Message m = messages.get(i);
             if (m.text.equals(previous)) {
@@ -811,6 +829,7 @@ public class ChatAccessibilityService extends AccessibilityService {
             if (groupChat && m.speaker.length() > 0) {
                 // 群聊：直接用昵称，让判定模型分得清谁是谁
                 who = m.speaker + "：";
+                named++;
             } else if (Math.abs(mx - width / 2) < width * 0.05 && mleft > width * 0.20) {
                 // 水平居中的是系统提示（「全员禁言中，仅群主和管理员可发言」
                 // 「你撤回了一条消息」这类），不属于任何一方。放在署名之后判断：
@@ -823,6 +842,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 // 那一侧的边缘（该次实测 left 恒为 147），真正居中的系统提示左右
                 // 留白对称，left 一定更靠里。
                 who = "";
+                notice++;
             } else if (groupChat) {
                 // 群聊里没认出署名的那些。这个场景下"左边是对方、右边是我"不成立：
                 // 所有人都在左边，两簇聚类能凭空造出一条中线来。所以只有明显贴到
@@ -830,17 +850,24 @@ public class ChatAccessibilityService extends AccessibilityService {
                 // 比标错一次"对方"代价大得多。
                 if (mx > width * 0.62) {
                     who = "我：";
+                    mine++;
                 } else if (mx < split - margin) {
                     who = "对方：";
+                    other++;
                 } else {
                     who = "";
+                    lost++;
                 }
             } else if (mx < split - margin) {
                 who = "对方：";
+                other++;
             } else if (mx > split + margin) {
                 who = "我：";
+                mine++;
             } else {
+                // 一对一的兜底：既贴不到左、也贴不到右。长消息最容易掉进这里
                 who = "";
+                lost++;
             }
             if (sb.length() > 0) {
                 sb.append('\n');
@@ -851,6 +878,44 @@ public class ChatAccessibilityService extends AccessibilityService {
             trace("T [" + who + "] len=" + m.text.length());
         }
         lastTranscriptLines = kept;
+        lastReading = reading(kept, named, mine, other, notice, lost, groupChat);
+        return sb.toString();
+    }
+
+    /**
+     * 把这次转录的构成拼成一行给用户看的摘要。
+     *
+     * <p>判定结论和它的输入之间原本没有任何可核对的东西。用户在屏幕上看到的文字，和
+     * 无障碍树里的文字不是一回事——一条消息在树里是四五个节点，长消息会丢掉说话人，
+     * 标题栏和头像描述会混进来——而结论的措辞天然通顺，读错了从结论上根本看不出来。
+     *
+     * <p>只报结构、不报内容，是唯一既能核对又不占地方的做法：用户清楚自己刚才说了几句、
+     * 群里几个人在说话，对不上就说明读坏了。顺带也不碰隐私，这一行不含任何原文。
+     */
+    private static String reading(int kept, int named, int mine, int other, int notice,
+            int lost, boolean groupChat) {
+        StringBuilder sb = new StringBuilder("读到 ").append(kept).append(" 条");
+        if (groupChat) {
+            // 不报"几个人"：群聊里自己那条也带昵称，仅凭文本分不出哪个昵称是自己，
+            // 报出来的人头数会多一个，反而误导。
+            if (kept > 0 && named >= kept) {
+                sb.append(" · 全部认出署名");
+            } else if (named > 0) {
+                sb.append(" · 署名 ").append(named).append('/').append(kept);
+            }
+        }
+        if (other > 0) {
+            sb.append(" · 对方 ").append(other);
+        }
+        if (mine > 0) {
+            sb.append(" · 我 ").append(mine);
+        }
+        if (notice > 0) {
+            sb.append(" · 系统提示 ").append(notice);
+        }
+        if (lost > 0) {
+            sb.append(" · 有 ").append(lost).append(" 条没认出发言人");
+        }
         return sb.toString();
     }
 

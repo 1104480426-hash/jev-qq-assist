@@ -441,8 +441,12 @@ public class OverlayService extends Service {
                             }
                             headlineText = DecisionSpec.plainHeadline(answers);
                             bodyText = DecisionSpec.plainAdvice(answers);
-                            // 原始判定不再占正文，压成一行小字放在下面当依据
-                            metaText = DecisionSpec.evidence(answers);
+                            // 原始判定不再占正文，压成一行小字放在下面当依据。
+                            // 依据行下面再补一行输入摘要：结论看不出读没读对，用户需要一个
+                            // 能跟刚才那段聊天对上的锚点——对不上就说明这次读坏了。
+                            String reading = ChatAccessibilityService.lastReading();
+                            metaText = DecisionSpec.evidence(answers)
+                                    + (reading.length() > 0 ? "\n" + reading : "");
                             pillText = headlineText;
                             riskHigh = DecisionSpec.isRisky(answers);
 
