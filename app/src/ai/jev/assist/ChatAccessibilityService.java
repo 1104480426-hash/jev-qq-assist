@@ -283,6 +283,9 @@ public class ChatAccessibilityService extends AccessibilityService {
 
     /** 常见聊天 App 的包名，用于把"当前在读谁"讲成人话。 */
     private static final String[][] KNOWN_APPS = {
+            // 自己的演示页。不写这一条的话，演示模式下「来源」会显示成 ai.jev.assist，
+            // 对着一个包名没人知道那是什么。
+            {"ai.jev.assist", "演示模式"},
             {"com.tencent.mobileqq", "QQ"},
             {"com.tencent.tim", "TIM"},
             {"com.tencent.mm", "微信"},

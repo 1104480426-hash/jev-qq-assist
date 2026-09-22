@@ -1022,11 +1022,44 @@ public class OverlayService extends Service {
             if (cm == null) {
                 return;
             }
-            cm.setPrimaryClip(ClipData.newPlainText("jev", headlineText + "\n" + bodyText));
+            cm.setPrimaryClip(ClipData.newPlainText("Jev 判定", clipText()));
             toast("已复制");
         } catch (Exception e) {
             toast("复制失败");
         }
+    }
+
+    /**
+     * 复制出去的内容。
+     *
+     * <p>只带结论和建议是不够的：贴进笔记、发给别人，那两句话就没有来处了——从哪判的、
+     * 什么时候判的、依据是什么，全丢了。上下文不足时更糟：标题是「只读到 2 条，判定
+     * 不可靠」，复制出来变成"别信"后面紧跟一段照样给出的建议，读的人不知道那是警示。
+     *
+     * <p>所以带上三层：判定、建议、依据，再加来源和时刻。
+     */
+    private String clipText() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("【Jev 判定】").append(headlineText);
+        if (bodyText.length() > 0) {
+            sb.append("\n\n").append(bodyText);
+        }
+        if (metaText.length() > 0) {
+            sb.append("\n\n").append(metaText);
+        }
+        sb.append("\n\n来源：");
+        String src = ChatAccessibilityService.pinnedSourceName();
+        sb.append(src.length() > 0 ? src : "当前窗口");
+        long at = ChatAccessibilityService.pinnedAt();
+        if (at > 0) {
+            sb.append(" · ").append(stamp(at));
+        }
+        return sb.toString();
+    }
+
+    private static String stamp(long millis) {
+        return new java.text.SimpleDateFormat("M月d日 HH:mm", java.util.Locale.getDefault())
+                .format(new java.util.Date(millis));
     }
 
     private void toast(String msg) {
