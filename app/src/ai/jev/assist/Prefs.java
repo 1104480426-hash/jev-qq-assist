@@ -82,9 +82,15 @@ public final class Prefs {
         sp(c).edit().putString(K_KEY, v.trim()).apply();
     }
 
-    /** 抓取最近多少条聊天行作为上下文。 */
+    /**
+     * 抓取最近多少条聊天行作为上下文。
+     *
+     * <p>默认值从 12 提到 20。实测（见 docs/jev-behavior-notes.md）上下文越短判定越飘：
+     * 只给一行时，模型会以 0.92 的置信度把一句普通招呼判成 smalltalk；给够五行才收敛。
+     * 群聊尤其吃亏——12 行里光昵称就占掉三四行，真正的内容没剩几句。
+     */
     public static int contextLines(Context c) {
-        return sp(c).getInt(K_LINES, 12);
+        return sp(c).getInt(K_LINES, 20);
     }
 
     public static void setContextLines(Context c, int v) {

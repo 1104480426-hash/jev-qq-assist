@@ -206,6 +206,10 @@ public class MainActivity extends Activity {
         // 把实际抓到的文字摊出来。判定不对时，先看这里：是读错了窗口，
         // 还是说话人认反了，一眼能分清，不用去猜。
         if (captured.length() > 0) {
+            String stats = ChatAccessibilityService.lastStats();
+            if (stats.length() > 0) {
+                sb.append('\n').append(stats);
+            }
             String preview = captured.length() > 240 ? captured.substring(0, 240) + " …" : captured;
             sb.append("\n\n—— 实际读到 ——\n").append(preview);
         }

@@ -3,6 +3,7 @@ package ai.jev.assist;
 import android.accessibilityservice.AccessibilityService;
 import android.graphics.Rect;
 import android.util.DisplayMetrics;
+import android.util.Log;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -52,6 +53,39 @@ public class ChatAccessibilityService extends AccessibilityService {
 
     private static final long THROTTLE_MS = 250L;
     private static final int MAX_NODES = 4000;
+    private static final String TAG = "JevWingman";
+
+    /**
+     * 按需抓取期间记录每个节点的去向，抓完就写进 logcat。
+     *
+     * <p>被动缓存和事后 dump 看到的是两个不同瞬间的屏幕（群聊一直在滚），
+     * 对不上账。要让"读错了"这件事可复现，只能在抓取的那一帧里留痕：
+     * 哪些节点被收下、哪些被丢、丢在哪个条件上。
+     */
+    private StringBuilder traceBuf = null;
+
+    private void trace(String s) {
+        if (traceBuf != null) {
+            traceBuf.append(s).append('\n');
+        }
+    }
+
+    /** 节点类名去掉包前缀，日志里看着清爽。 */
+    private static String shortCls(AccessibilityNodeInfo n) {
+        CharSequence c = n.getClassName();
+        if (c == null) {
+            return "?";
+        }
+        String s = c.toString();
+        int dot = s.lastIndexOf('.');
+        return dot < 0 ? s : s.substring(dot + 1);
+    }
+
+    /** 只留开头十个字：够看清是什么控件，不至于把整段聊天抄进日志。 */
+    private static String head(String v) {
+        String flat = v.replace('\n', ' ');
+        return (flat.length() > 10 ? flat.substring(0, 10) + "…" : flat) + " (len=" + v.length() + ")";
+    }
 
     @Override
     protected void onServiceConnected() {
@@ -97,20 +131,28 @@ public class ChatAccessibilityService extends AccessibilityService {
     }
 
     private String captureActiveWindow() {
-        AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) {
-            return "";
-        }
+        traceBuf = new StringBuilder(4096);
         try {
-            List<Line> lines = new ArrayList<>();
-            collect(root, lines, 0);
-            if (lines.isEmpty()) {
+            AccessibilityNodeInfo root = getRootInActiveWindow();
+            if (root == null) {
+                trace("! 没有活动窗口");
                 return "";
             }
-            DisplayMetrics dm = getResources().getDisplayMetrics();
-            return buildTranscript(lines, dm.widthPixels);
+            try {
+                List<Line> lines = new ArrayList<>();
+                collect(root, lines, 0);
+                if (lines.isEmpty()) {
+                    trace("! 一行都没收下");
+                    return "";
+                }
+                DisplayMetrics dm = getResources().getDisplayMetrics();
+                return buildTranscript(lines, dm.widthPixels);
+            } finally {
+                recycleSafely(root);
+            }
         } finally {
-            recycleSafely(root);
+            Log.i(TAG, "—— 抓取 ——\n" + traceBuf);
+            traceBuf = null;
         }
     }
 
@@ -257,8 +299,10 @@ public class ChatAccessibilityService extends AccessibilityService {
             return;
         }
         CharSequence text = node.getText();
+        boolean fromDesc = false;
         if (text == null || text.length() == 0) {
             text = node.getContentDescription();
+            fromDesc = true;
         }
         if (text != null && text.length() > 0) {
             String value = text.toString().trim();
@@ -267,6 +311,10 @@ public class ChatAccessibilityService extends AccessibilityService {
                 node.getBoundsInScreen(r);
                 if (!r.isEmpty()) {
                     out.add(new Line(value, r.top, r.bottom, r.left, r.centerX()));
+                    trace("K " + shortCls(node) + (fromDesc ? "(desc)" : "")
+                            + " [" + r.top + "," + r.bottom + "," + r.left + "] " + head(value));
+                } else {
+                    trace("R 无坐标 | " + head(value));
                 }
             }
         }
@@ -287,36 +335,51 @@ public class ChatAccessibilityService extends AccessibilityService {
         CharSequence cls = node.getClassName();
         String className = cls == null ? "" : cls.toString();
         if (className.contains("EditText") || className.contains("Button")) {
-            return false;
+            return reject("EditText/Button", value);
         }
         if (node.isEditable()) {
-            return false;
+            return reject("可编辑", value);
         }
         if (value.length() > 500) {
-            return false;
+            return reject("过长", value);
         }
         if (NOISE.contains(value)) {
-            return false;
+            return reject("通用控件词", value);
         }
         // 纯时间戳或纯数字，通常是分隔符
         if (value.matches("^\\d{1,2}:\\d{2}(:\\d{2})?$") || value.matches("^\\d+$")) {
-            return false;
+            return reject("纯时间/数字", value);
         }
         // QQ 群聊的分隔条长这样：「112609 2026-09-22 16:28:25」，
         // 序号 + 日期 + 时间。混进转录会打断「昵称-消息」的相邻关系。
         if (value.matches("^\\d{3,8}\\s+\\d{4}-\\d{1,2}-\\d{1,2}\\s+\\d{1,2}:\\d{2}(:\\d{2})?$")) {
-            return false;
+            return reject("QQ时间分隔条", value);
         }
-        // 纯日期，或日期打头的行
+        // 日期打头的行。实测 QQ 的分隔条不一定带序号，也会只写「2026-09-22 16:28」
         if (value.matches("^\\d{4}-\\d{1,2}-\\d{1,2}(\\s.*)?$")) {
-            return false;
+            return reject("日期打头", value);
+        }
+        // 序号 + 日期的其它排列，比如「2026/9/22 16:28」或「16:28 2026-09-22」
+        if (value.matches("^[\\d\\s:/-]{8,}$")) {
+            return reject("数字分隔符堆", value);
         }
         // 群名 + 成员数这种标题：「某某群(1489)」
         if (value.matches("^.{1,30}\\(\\d{1,6}\\)$")) {
-            return false;
+            return reject("群标题", value);
         }
-        // 至少要有一个中日韩字符或字母，纯符号不要
-        return value.matches(".*[\\p{IsHan}A-Za-z].*");
+        // 至少要有一个文字或数字。纯标点不要——「。。。」「···」「|」这类是装饰。
+        // 注意这里必须放行数字：聊天里「9.19」「3.14」「666」都是正常发言，
+        // 早先只放行汉字和字母，把它们整条吞掉了，连累上下文的配对。
+        if (!value.matches(".*[\\p{IsHan}A-Za-z0-9].*")) {
+            return reject("纯符号", value);
+        }
+        return true;
+    }
+
+    /** 拒绝一条记录，并把理由留在诊断日志里。 */
+    private boolean reject(String reason, String value) {
+        trace("R " + reason + " | " + head(value));
+        return false;
     }
 
     /**
