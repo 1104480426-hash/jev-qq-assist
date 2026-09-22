@@ -1,4 +1,4 @@
-![Jev QQ Assist](docs/banner.png)
+![Jev QQ Assist](docs/banner.jpg)
 
 # Jev QQ Assist
 
