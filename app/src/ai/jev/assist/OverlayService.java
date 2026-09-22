@@ -1,10 +1,13 @@
 package ai.jev.assist;
 
+import android.animation.ValueAnimator;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.PixelFormat;
@@ -17,7 +20,10 @@ import android.view.LayoutInflater;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.Button;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import org.json.JSONObject;
 
@@ -25,6 +31,9 @@ import org.json.JSONObject;
  * 悬浮球常驻服务：点一下就拿当前聊天窗口的转录去问 Jev，把类型化判定摊在屏幕上。
  *
  * <p>它只读不写：不注入文本、不点发送。决策给你，动作你自己做。
+ *
+ * <p>交互上按聊天场景调过几轮：球松手吸附到最近的侧边并且位置会记住，卡片默认落在
+ * 屏幕上方（最新消息在底部，压住它最难受）、可以拖、点卡片外面就收起。
  */
 public class OverlayService extends Service {
 
@@ -37,6 +46,8 @@ public class OverlayService extends Service {
     private static final String CHANNEL_ID = "jev_assist_overlay";
     private static final int NOTIFICATION_ID = 4401;
     private static final int DRAG_SLOP_DP = 6;
+    private static final int EDGE_MARGIN_DP = 6;
+    private static final int BALL_SIZE_DP = 52;
 
     private WindowManager windowManager;
     private View ballView;
@@ -46,12 +57,31 @@ public class OverlayService extends Service {
 
     private final Handler ui = new Handler(Looper.getMainLooper());
     private int dragSlopPx;
+    private int ballSizePx;
+    private int screenW;
+    private int screenH;
+    private float density;
+
+    /** 判定进行中的点点动画，避免首次加载模型时看着像卡死。 */
+    private Runnable progressTick;
+    private int progressDots;
+
+    private String cardHeadline = "";
+    private String cardBody = "";
 
     @Override
     public void onCreate() {
         super.onCreate();
         windowManager = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
-        dragSlopPx = (int) (DRAG_SLOP_DP * getResources().getDisplayMetrics().density);
+        density = getResources().getDisplayMetrics().density;
+        dragSlopPx = (int) (DRAG_SLOP_DP * density);
+        ballSizePx = (int) (BALL_SIZE_DP * density);
+        syncScreenSize();
+    }
+
+    private void syncScreenSize() {
+        screenW = getResources().getDisplayMetrics().widthPixels;
+        screenH = getResources().getDisplayMetrics().heightPixels;
     }
 
     @Override
@@ -77,7 +107,13 @@ public class OverlayService extends Service {
     @Override
     public void onDestroy() {
         running = false;
+        stopProgress();
         removeCard();
+        removeBall();
+        super.onDestroy();
+    }
+
+    private void removeBall() {
         if (ballView != null && windowManager != null) {
             try {
                 windowManager.removeView(ballView);
@@ -86,7 +122,6 @@ public class OverlayService extends Service {
             }
             ballView = null;
         }
-        super.onDestroy();
     }
 
     private void startForegroundCompat() {
@@ -122,6 +157,8 @@ public class OverlayService extends Service {
         }
     }
 
+    // ---- 悬浮球 ----
+
     private void showBall() {
         ballView = LayoutInflater.from(this).inflate(R.layout.floating_ball, null);
 
@@ -131,19 +168,19 @@ public class OverlayService extends Service {
 
         // 尺寸在这里定死：inflate(res, null) 会丢掉 XML 里的 layout_width/height，
         // 只靠 wrap_content 会让球被挤成几十像素的一条。
-        float density = getResources().getDisplayMetrics().density;
-        int ballSize = (int) (52 * density);
-
         ballParams = new WindowManager.LayoutParams(
-                ballSize,
-                ballSize,
+                ballSizePx,
+                ballSizePx,
                 type,
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                         | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT);
         ballParams.gravity = Gravity.TOP | Gravity.START;
-        ballParams.x = (int) (12 * getResources().getDisplayMetrics().density);
-        ballParams.y = (int) (getResources().getDisplayMetrics().heightPixels * 0.55f);
+
+        // 位置按比例还原，转屏换分辨率后仍落在原来那一侧
+        ballParams.x = (int) (Prefs.ballX(this) * screenW);
+        ballParams.y = (int) (Prefs.ballY(this) * screenH);
+        clampBallInside();
 
         ballView.setOnTouchListener(new BallTouchListener());
 
@@ -155,7 +192,12 @@ public class OverlayService extends Service {
         }
     }
 
-    /** 拖动悬浮球，位移小于阈值则算点击。 */
+    private void clampBallInside() {
+        ballParams.x = Math.max(0, Math.min(screenW - ballSizePx, ballParams.x));
+        ballParams.y = Math.max(0, Math.min(screenH - ballSizePx, ballParams.y));
+    }
+
+    /** 拖动悬浮球；位移小于阈值算点击，松手吸附到最近的侧边。 */
     private final class BallTouchListener implements View.OnTouchListener {
         private int startX;
         private int startY;
@@ -172,8 +214,9 @@ public class OverlayService extends Service {
                     touchX = event.getRawX();
                     touchY = event.getRawY();
                     moved = false;
+                    ballView.setAlpha(0.75f);
                     return true;
-                case MotionEvent.ACTION_MOVE:
+                case MotionEvent.ACTION_MOVE: {
                     int dx = (int) (event.getRawX() - touchX);
                     int dy = (int) (event.getRawY() - touchY);
                     if (Math.abs(dx) > dragSlopPx || Math.abs(dy) > dragSlopPx) {
@@ -181,14 +224,16 @@ public class OverlayService extends Service {
                     }
                     ballParams.x = startX + dx;
                     ballParams.y = startY + dy;
-                    try {
-                        windowManager.updateViewLayout(ballView, ballParams);
-                    } catch (Exception ignored) {
-                        // 视图已移除
-                    }
+                    clampBallInside();
+                    moveView(ballView, ballParams);
                     return true;
+                }
                 case MotionEvent.ACTION_UP:
-                    if (!moved) {
+                case MotionEvent.ACTION_CANCEL:
+                    ballView.setAlpha(1f);
+                    if (moved) {
+                        snapBallToEdge();
+                    } else {
                         onBallTap();
                     }
                     return true;
@@ -197,6 +242,59 @@ public class OverlayService extends Service {
             }
         }
     }
+
+    /** 停手后横向吸到离得近的那一侧，别停在聊天区中间挡话。 */
+    private void snapBallToEdge() {
+        int margin = (int) (EDGE_MARGIN_DP * density);
+        boolean toLeft = ballParams.x + ballSizePx / 2 < screenW / 2;
+        int targetX = toLeft ? margin : screenW - ballSizePx - margin;
+        commitBallPosition(targetX, ballParams.y);
+    }
+
+    /** 把球移到目标位置并落盘。用一段很短的横向动画，比瞬移自然。 */
+    private void commitBallPosition(final int targetX, final int targetY) {
+        final int fromX = ballParams.x;
+        if (fromX == targetX) {
+            ballParams.y = targetY;
+            moveView(ballView, ballParams);
+            saveBallPosition();
+            return;
+        }
+        ValueAnimator anim = ValueAnimator.ofInt(fromX, targetX);
+        anim.setDuration(140);
+        anim.setInterpolator(new DecelerateInterpolator());
+        anim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                ballParams.x = (int) animation.getAnimatedValue();
+                ballParams.y = targetY;
+                moveView(ballView, ballParams);
+            }
+        });
+        anim.start();
+        ballParams.y = targetY;
+        saveBallPosition();
+    }
+
+    private void saveBallPosition() {
+        if (screenW <= 0 || screenH <= 0) {
+            return;
+        }
+        Prefs.setBallPos(this, ballParams.x / (float) screenW, ballParams.y / (float) screenH);
+    }
+
+    private void moveView(View view, WindowManager.LayoutParams params) {
+        if (view == null) {
+            return;
+        }
+        try {
+            windowManager.updateViewLayout(view, params);
+        } catch (Exception ignored) {
+            // 视图已移除
+        }
+    }
+
+    // ---- 判定 ----
 
     private void onBallTap() {
         String transcript = ChatAccessibilityService.cachedTranscript();
@@ -209,7 +307,8 @@ public class OverlayService extends Service {
         String hint = Prefs.isLocal(this)
                 ? "已取最近 " + Prefs.contextLines(this) + " 行对话，本地模型判定中（首次会加载模型，稍慢）"
                 : "已取最近 " + Prefs.contextLines(this) + " 行对话，正在问远端判定端点。";
-        showCard("正在判定…", hint, "", false);
+        showCard("正在判定", hint, "", false);
+        startProgress();
         ask(transcript);
     }
 
@@ -266,8 +365,14 @@ public class OverlayService extends Service {
         }, "jev-decide").start();
     }
 
+    // ---- 卡片 ----
+
     private void showCard(String headline, String body, String meta, final boolean retryable) {
+        stopProgress();
         removeCard();
+
+        cardHeadline = headline;
+        cardBody = body;
 
         cardView = LayoutInflater.from(this).inflate(R.layout.decision_card, null);
         ((TextView) cardView.findViewById(R.id.card_headline)).setText(headline);
@@ -278,20 +383,47 @@ public class OverlayService extends Service {
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
 
-        // 同理固定宽度；高度交给 AT_MOST 测量，卡片本身是 LinearLayout，能正确撑开。
-        int cardWidth = (int) (300 * getResources().getDisplayMetrics().density);
+        // 固定宽度；高度交给 AT_MOST 测量，卡片本身是 LinearLayout，能正确撑开。
+        int cardWidth = (int) (280 * density);
         cardParams = new WindowManager.LayoutParams(
                 cardWidth,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
                 PixelFormat.TRANSLUCENT);
-        cardParams.gravity = Gravity.CENTER;
+        cardParams.gravity = Gravity.TOP | Gravity.START;
+
+        // 默认落在屏幕上方：聊天窗口的最新消息在底部，压住它最难受
+        cardParams.x = (int) (Prefs.cardX(this) * screenW) - cardWidth / 2;
+        cardParams.y = (int) (Prefs.cardY(this) * screenH);
+        clampCardInside(cardWidth);
+
+        View header = cardView.findViewById(R.id.card_header);
+        header.setOnTouchListener(new CardDragListener(cardWidth));
+
+        // 点卡片外面就收起，不用专门去够那个按钮
+        cardView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (event.getActionMasked() == MotionEvent.ACTION_OUTSIDE) {
+                    removeCard();
+                    return true;
+                }
+                return false;
+            }
+        });
 
         cardView.findViewById(R.id.card_close).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 removeCard();
+            }
+        });
+        cardView.findViewById(R.id.card_copy).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                copyCardToClipboard();
             }
         });
         cardView.findViewById(R.id.card_again).setOnClickListener(new View.OnClickListener() {
@@ -310,7 +442,118 @@ public class OverlayService extends Service {
         }
     }
 
+    private void clampCardInside(int cardWidth) {
+        cardParams.x = Math.max(0, Math.min(screenW - cardWidth, cardParams.x));
+        cardParams.y = Math.max(0, Math.min(screenH - (int) (120 * density), cardParams.y));
+    }
+
+    /** 按住卡片顶部那一条拖动，松手记住位置。 */
+    private final class CardDragListener implements View.OnTouchListener {
+        private final int cardWidth;
+        private int startX;
+        private int startY;
+        private float touchX;
+        private float touchY;
+        private boolean moved;
+
+        CardDragListener(int cardWidth) {
+            this.cardWidth = cardWidth;
+        }
+
+        @Override
+        public boolean onTouch(View v, MotionEvent event) {
+            switch (event.getActionMasked()) {
+                case MotionEvent.ACTION_DOWN:
+                    startX = cardParams.x;
+                    startY = cardParams.y;
+                    touchX = event.getRawX();
+                    touchY = event.getRawY();
+                    moved = false;
+                    return true;
+                case MotionEvent.ACTION_MOVE: {
+                    int dx = (int) (event.getRawX() - touchX);
+                    int dy = (int) (event.getRawY() - touchY);
+                    if (Math.abs(dx) > dragSlopPx || Math.abs(dy) > dragSlopPx) {
+                        moved = true;
+                    }
+                    if (moved) {
+                        cardParams.x = startX + dx;
+                        cardParams.y = startY + dy;
+                        clampCardInside(cardWidth);
+                        moveView(cardView, cardParams);
+                    }
+                    return true;
+                }
+                case MotionEvent.ACTION_UP:
+                case MotionEvent.ACTION_CANCEL:
+                    if (moved && screenW > 0 && screenH > 0) {
+                        Prefs.setCardPos(OverlayService.this,
+                                (cardParams.x + cardWidth / 2f) / screenW,
+                                cardParams.y / (float) screenH);
+                    }
+                    return true;
+                default:
+                    return false;
+            }
+        }
+    }
+
+    private void copyCardToClipboard() {
+        try {
+            ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (cm == null) {
+                return;
+            }
+            String text = cardHeadline + "\n" + cardBody;
+            cm.setPrimaryClip(ClipData.newPlainText("jev", text));
+            toast("已复制");
+        } catch (Exception e) {
+            toast("复制失败");
+        }
+    }
+
+    private void toast(String msg) {
+        try {
+            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show();
+        } catch (Exception ignored) {
+            // 通知权限受限时忽略
+        }
+    }
+
+    /** 让「正在判定」看起来在动：本地首次要加载模型，几秒空窗很容易被当成卡死。 */
+    private void startProgress() {
+        stopProgress();
+        progressDots = 0;
+        progressTick = new Runnable() {
+            @Override
+            public void run() {
+                if (cardView == null) {
+                    return;
+                }
+                View headline = cardView.findViewById(R.id.card_headline);
+                if (headline instanceof TextView) {
+                    StringBuilder sb = new StringBuilder("正在判定");
+                    for (int i = 0; i < progressDots; i++) {
+                        sb.append('.');
+                    }
+                    ((TextView) headline).setText(sb.toString());
+                }
+                progressDots = (progressDots + 1) % 4;
+                ui.postDelayed(this, 450);
+            }
+        };
+        ui.post(progressTick);
+    }
+
+    private void stopProgress() {
+        if (progressTick != null) {
+            ui.removeCallbacks(progressTick);
+            progressTick = null;
+        }
+    }
+
     private void removeCard() {
+        stopProgress();
         if (cardView != null && windowManager != null) {
             try {
                 windowManager.removeView(cardView);

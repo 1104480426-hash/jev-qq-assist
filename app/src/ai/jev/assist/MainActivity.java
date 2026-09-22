@@ -43,7 +43,12 @@ public class MainActivity extends Activity {
 
         endpointBox.setText(Prefs.endpoint(this));
         modelBox.setText(Prefs.model(this));
-        keyBox.setText(Prefs.apiKey(this));
+        // 不回填密钥明文：这张界面很容易被截图或录屏，密钥不该出现在上面。
+        // 留空表示保持不变，输入新值才覆盖。
+        keyBox.setText("");
+        keyBox.setHint(Prefs.apiKey(this).length() > 0
+                ? "已保存（留空不变，输入新值可覆盖）"
+                : "可留空");
         linesBox.setText(String.valueOf(Prefs.contextLines(this)));
 
         findViewById(R.id.save).setOnClickListener(new View.OnClickListener() {
@@ -135,7 +140,13 @@ public class MainActivity extends Activity {
     private void save() {
         Prefs.setEndpoint(this, endpointBox.getText().toString());
         Prefs.setModel(this, modelBox.getText().toString());
-        Prefs.setApiKey(this, keyBox.getText().toString());
+        // 只有真正输入了新密钥才写入，空着就是"别动它"
+        String typedKey = keyBox.getText().toString().trim();
+        if (typedKey.length() > 0) {
+            Prefs.setApiKey(this, typedKey);
+            keyBox.setText("");
+            keyBox.setHint("已保存（留空不变，输入新值可覆盖）");
+        }
         String lines = linesBox.getText().toString().trim();
         if (!TextUtils.isEmpty(lines)) {
             try {

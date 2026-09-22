@@ -90,4 +90,45 @@ public final class Prefs {
     public static void setContextLines(Context c, int v) {
         sp(c).edit().putInt(K_LINES, Math.max(2, Math.min(60, v))).apply();
     }
+
+    // ---- 悬浮球与卡片的位置 ----
+    // 存的是相对屏幕的比例而不是像素，换分辨率、转屏之后位置依然合理。
+    // -1 表示还没被用户拖过，用代码里的默认值。
+
+    private static final String K_BALL_X = "ball_x";
+    private static final String K_BALL_Y = "ball_y";
+    private static final String K_CARD_X = "card_x";
+    private static final String K_CARD_Y = "card_y";
+
+    public static float ballX(Context c) {
+        return sp(c).getFloat(K_BALL_X, 0.02f);
+    }
+
+    public static float ballY(Context c) {
+        return sp(c).getFloat(K_BALL_Y, 0.55f);
+    }
+
+    public static void setBallPos(Context c, float x, float y) {
+        sp(c).edit().putFloat(K_BALL_X, clamp(x)).putFloat(K_BALL_Y, clamp(y)).apply();
+    }
+
+    /** 卡片默认靠上，因为聊天窗口的最新消息在底部，压住它最难受。 */
+    public static float cardX(Context c) {
+        return sp(c).getFloat(K_CARD_X, 0.5f);
+    }
+
+    public static float cardY(Context c) {
+        return sp(c).getFloat(K_CARD_Y, 0.12f);
+    }
+
+    public static void setCardPos(Context c, float x, float y) {
+        sp(c).edit().putFloat(K_CARD_X, clamp(x)).putFloat(K_CARD_Y, clamp(y)).apply();
+    }
+
+    private static float clamp(float v) {
+        if (Float.isNaN(v)) {
+            return 0f;
+        }
+        return Math.max(0f, Math.min(1f, v));
+    }
 }
