@@ -91,6 +91,8 @@ public class OverlayService extends Service {
     /** 判定还没回来。形态和结果胶囊一样，但点它是收掉而不是展开。 */
     private static final int STATE_WAITING = 3;
     private int displayState = STATE_NONE;
+    /** 收起动画进行中。挡住重入，否则连点两下会把球叠出来两个。 */
+    private boolean collapsing = false;
 
     @Override
     public void onCreate() {
@@ -455,7 +457,7 @@ public class OverlayService extends Service {
                             // 能跟刚才那段聊天对上的锚点——对不上就说明这次读坏了。
                             String reading = ChatAccessibilityService.lastReading();
                             metaText = DecisionSpec.evidence(answers)
-                                    + (reading.length() > 0 ? "\n" + reading : "");
+                                    + (reading.length() > 0 ? " · " + reading : "");
                             pillText = headlineText;
                             riskHigh = DecisionSpec.isRisky(answers);
 
@@ -633,8 +635,8 @@ public class OverlayService extends Service {
         // 同样的窗口参数（局部 735x601、blurBehindRadius=47），有时只糊卡片背后，
         // 有时把整个屏幕都糊掉，聊天界面就读不了了。一个会偶发毁掉主场景的效果不值当，
         // 所以玻璃质感全部由 bg_card 的分层来出。
-        // 人话版正文是两句话，比原来那五行更宽，卡片相应放宽一点
-        int cardWidth = (int) (312 * density);
+        // 加宽一点：正文每行多放几个字，换行少一行就比加宽带来的面积更划算
+        int cardWidth = (int) (344 * density);
         cardParams = new WindowManager.LayoutParams(
                 cardWidth,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -656,8 +658,12 @@ public class OverlayService extends Service {
             @Override
             public void onClick(View v) {
                 if (retryable || ChatAccessibilityService.cachedTranscript().length() > 0) {
-                    // 重判先退回球的形态，判定流程整条重走
-                    collapseToBall();
+                    // 重判要立刻进判定流程，不等收起动画跑完
+                    writeBallPosFromCard();
+                    collapsing = false;
+                    removeCard();
+                    removePill();
+                    showBall();
                     onBallTap();
                 }
             }
@@ -689,6 +695,23 @@ public class OverlayService extends Service {
                 View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
                 View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
         layoutCard();
+
+        // 从球心那个点放大出来。缩放中心设成球在卡片里的相对位置，所以它看起来是从
+        // 球原先待的地方长开的；不动画的话卡片就是"啪"地出现，位置再对也还是突兀。
+        float pivotX = ballParams.x + ballSizePx / 2f - cardParams.x;
+        float pivotY = ballParams.y + ballSizePx / 2f - cardParams.y;
+        cardView.setPivotX(pivotX);
+        cardView.setPivotY(pivotY);
+        cardView.setAlpha(0f);
+        cardView.setScaleX(0.72f);
+        cardView.setScaleY(0.72f);
+        cardView.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(170)
+                .setInterpolator(new android.view.animation.DecelerateInterpolator())
+                .start();
     }
 
     /**
@@ -696,22 +719,55 @@ public class OverlayService extends Service {
      *
      * <p>两者共用一个中心，所以位置是连续的：在哪展开，就在哪收起，下次展开还在原处。
      * 球的位置要写回偏好——卡片可能被拖过，拖动之后球就该从新地方出来。
+     *
+     * <p>卡片先缩回球心再换成球，和展开的方向相反，这样来回是一次连贯的开合。
      */
     private void collapseToBall() {
-        if (cardParams != null && cardView != null) {
-            int cardH = cardView.getMeasuredHeight();
-            if (cardH <= 0) {
-                cardH = (int) (190 * density);
-            }
-            int ballX = cardParams.x + cardParams.width / 2 - ballSizePx / 2;
-            int ballY = cardParams.y + cardH / 2 - ballSizePx / 2;
-            Prefs.setBallPos(this,
-                    Math.max(0, Math.min(screenW - ballSizePx, ballX)) / (float) screenW,
-                    Math.max(0, Math.min(screenH - ballSizePx, ballY)) / (float) screenH);
+        if (collapsing) {
+            return;
         }
-        removeCard();
+        writeBallPosFromCard();
+
+        if (cardView == null) {
+            removePill();
+            showBall();
+            return;
+        }
+
+        collapsing = true;
+        cardView.animate()
+                .alpha(0f)
+                .scaleX(0.72f)
+                .scaleY(0.72f)
+                .setDuration(140)
+                .setInterpolator(new android.view.animation.AccelerateInterpolator())
+                .withEndAction(new Runnable() {
+                    @Override
+                    public void run() {
+                        collapsing = false;
+                        removeCard();
+                        showBall();
+                    }
+                })
+                .start();
+        // 胶囊这时候就该消失，不必等卡片缩完
         removePill();
-        showBall();
+    }
+
+    /** 把球的位置更新成卡片当前的中心，并写回偏好。 */
+    private void writeBallPosFromCard() {
+        if (cardParams == null || cardView == null) {
+            return;
+        }
+        int cardH = cardView.getMeasuredHeight();
+        if (cardH <= 0) {
+            cardH = (int) (190 * density);
+        }
+        int ballX = cardParams.x + cardParams.width / 2 - ballSizePx / 2;
+        int ballY = cardParams.y + cardH / 2 - ballSizePx / 2;
+        Prefs.setBallPos(this,
+                Math.max(0, Math.min(screenW - ballSizePx, ballX)) / (float) screenW,
+                Math.max(0, Math.min(screenH - ballSizePx, ballY)) / (float) screenH);
     }
 
     /**

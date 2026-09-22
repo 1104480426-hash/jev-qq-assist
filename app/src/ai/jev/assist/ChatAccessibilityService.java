@@ -895,20 +895,21 @@ public class ChatAccessibilityService extends AccessibilityService {
     private static String reading(int kept, int named, int mine, int other, int notice,
             int lost, boolean groupChat) {
         StringBuilder sb = new StringBuilder("读到 ").append(kept).append(" 条");
+
+        // 正常情况只报条数。归属分布常驻在卡片上是白占一行小字——它真正有用的时刻
+        // 是"这次读坏了"，所以只在读出来不对劲的时候才展开细节。
+        boolean odd = lost > 0
+                || (groupChat ? named < kept : kept > 1 && (mine == 0 || other == 0));
+        if (!odd) {
+            return sb.toString();
+        }
+
         if (groupChat) {
             // 不报"几个人"：群聊里自己那条也带昵称，仅凭文本分不出哪个昵称是自己，
             // 报出来的人头数会多一个，反而误导。
-            if (kept > 0 && named >= kept) {
-                sb.append(" · 全部认出署名");
-            } else if (named > 0) {
-                sb.append(" · 署名 ").append(named).append('/').append(kept);
-            }
-        }
-        if (other > 0) {
-            sb.append(" · 对方 ").append(other);
-        }
-        if (mine > 0) {
-            sb.append(" · 我 ").append(mine);
+            sb.append(" · 署名 ").append(named).append('/').append(kept);
+        } else {
+            sb.append(" · 对方 ").append(other).append(" · 我 ").append(mine);
         }
         if (notice > 0) {
             sb.append(" · 系统提示 ").append(notice);
