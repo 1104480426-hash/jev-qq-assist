@@ -83,6 +83,13 @@ public class OverlayService extends Service {
     /** 请求序号，避免旧请求的结果盖掉新请求的。 */
     private int requestSeq = 0;
 
+    // 当前屏幕上摆着什么。悬浮球是唯一的总开关，按这个状态循环推进：
+    // 无 -> 判定（卡片形态，带进度动画）-> 胶囊 -> 展开成卡片 -> 无 …
+    private static final int STATE_NONE = 0;
+    private static final int STATE_CARD = 1;
+    private static final int STATE_PILL = 2;
+    private int displayState = STATE_NONE;
+
     @Override
     public void onCreate() {
         super.onCreate();
@@ -321,16 +328,35 @@ public class OverlayService extends Service {
 
     // ---- 判定 ----
 
+    /**
+     * 悬浮球是唯一的总开关。每次点击把状态推进一格：
+     *
+     * <pre>
+     *   无 ──点──> 判定中（卡片带进度动画）
+     *   判定中 ──点──> 直接收掉
+     *   胶囊 ──点──> 展开成完整卡片
+     *   卡片 ──点──> 全部收起，回到无
+     * </pre>
+     *
+     * <p>所以卡片上不再需要「收起」按钮，展开和收起都由球负责。
+     */
     private void onBallTap() {
-        // 有结果（胶囊或卡片）就全部收掉，再点一次重新判定。
-        // 因为不能开 FLAG_WATCH_OUTSIDE_TOUCH（会把窗口表面撑到全屏），
-        // 显示状态就统一由悬浮球切换，和 iOS 的辅助触控一个逻辑。
-        if (cardView != null || pillView != null) {
-            dismissed = true;
-            removeCard();
-            removePill();
-            return;
+        switch (displayState) {
+            case STATE_PILL:
+                // 已有结果，展开详情
+                removePill();
+                showCard();
+                return;
+            case STATE_CARD:
+                // 卡片形态（结果或错误）点一下就全收掉
+                dismissed = true;
+                removeCard();
+                removePill();
+                return;
+            default:
+                break;
         }
+
         dismissed = false;
 
         String transcript = ChatAccessibilityService.cachedTranscript();
@@ -355,6 +381,9 @@ public class OverlayService extends Service {
         startProgress();
         ask(transcript);
     }
+
+    /** 上一次判定是否已经出过结果——决定再点球是收掉还是重新判。 */
+    private boolean cardDataFromLastRun = false;
 
     private void ask(final String transcript) {
         final boolean local = Prefs.isLocal(this);
@@ -470,6 +499,7 @@ public class OverlayService extends Service {
         pillView.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                // 点胶囊等同于再点一次悬浮球，直接进详情
                 removePill();
                 showCard();
             }
@@ -481,6 +511,7 @@ public class OverlayService extends Service {
             pillView = null;
             return;
         }
+        displayState = STATE_PILL;
 
         // 加进去之后才知道它多宽，这时才能把它摆在球旁边
         pillView.measure(
@@ -522,6 +553,14 @@ public class OverlayService extends Service {
             }
             pillView = null;
         }
+        syncDisplayState();
+    }
+
+    /** 两种视图都没了才算回到「无」——showCard 内部会先 removePill 再挂新视图。 */
+    private void syncDisplayState() {
+        if (cardView == null && pillView == null) {
+            displayState = STATE_NONE;
+        }
     }
 
     // ---- 卡片：点开胶囊才出现的详情 ----
@@ -555,18 +594,6 @@ public class OverlayService extends Service {
         View header = cardView.findViewById(R.id.card_header);
         header.setOnTouchListener(new CardDragListener(cardWidth));
 
-        cardView.findViewById(R.id.card_close).setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                // 有结果就退回胶囊，纯错误信息才整个关掉
-                if (retryable) {
-                    removeCard();
-                    showPill();
-                } else {
-                    removeCard();
-                }
-            }
-        });
         cardView.findViewById(R.id.card_copy).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -588,6 +615,7 @@ public class OverlayService extends Service {
             cardView = null;
             return;
         }
+        displayState = STATE_CARD;
         // 加进去之后才量得出它多高，这时才能把它摆到球旁边
         cardView.measure(
                 View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
@@ -745,5 +773,6 @@ public class OverlayService extends Service {
             }
             cardView = null;
         }
+        syncDisplayState();
     }
 }
