@@ -289,25 +289,32 @@ public class ChatAccessibilityService extends AccessibilityService {
     /**
      * 判断 a 是不是 b 上面那个昵称。
      *
-     * <p>三个条件同时成立才算：紧贴其上、更矮、够短。只用"紧贴"会误伤——两条挨得近的
-     * 短消息也会满足，所以额外要求它比下面那行矮一截、且不长于 12 个字。
+     * <p>四个条件同时成立才算，而且都留了余量——各个 App 的字号、行高、气泡间距都不一样，
+     * 阈值卡太死就只在一个 App 上成立。
+     *
+     * <p>其中"更矮"用的是相对比较（矮于对方的 85%）而不是绝对值，这样字号大的 App 和
+     * 字号小的 App 都适用。"更窄"是额外加的一道：昵称通常也短于消息气泡。
      */
     private boolean looksLikeSpeakerLabel(Line a, Line b) {
         if (a.height() <= 0 || b.height() <= 0) {
             return false;
         }
         int gap = b.top - a.bottom;
-        if (gap < -6 || gap > 20) {
-            return false;          // 不在正上方
+        if (gap < -8 || gap > 26) {
+            return false;              // 不在正上方（含一点容差给不同的行距）
         }
-        if (a.height() > b.height() * 0.72) {
-            return false;          // 昵称一定比正文矮
+        if (a.height() >= b.height() * 0.85) {
+            return false;              // 昵称一定比正文矮，但别要求矮太多
         }
         if (a.text.length() > 12) {
-            return false;          // 昵称不会很长
+            return false;              // 昵称不会很长
         }
         // 昵称一般不含句末标点，正文常有
-        return !a.text.matches(".*[。！？!?]$");
+        if (a.text.matches(".*[。！？!?]$")) {
+            return false;
+        }
+        // 昵称也短：宽于下面那行的一半，多半是两条挨着的消息，不是标签
+        return a.text.length() <= Math.max(4, b.text.length() / 2);
     }
 
     private String buildTranscript(List<Line> lines) {
