@@ -84,7 +84,7 @@ def main():
     icon = icon.resize((92, 92), Image.LANCZOS)
     canvas.alpha_composite(icon, (78, 92))
 
-    d.text((190, 100), "Jev QQ Assist", font=font(48), fill=TEXT)
+    d.text((190, 100), "Jev Wingman", font=font(48), fill=TEXT)
     d.text((192, 158), "基于 Jev 的 QQ 聊天决策辅助", font=font(22, bold=False), fill=ACCENT)
 
     body = [
