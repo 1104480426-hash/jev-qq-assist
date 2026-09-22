@@ -184,7 +184,12 @@ public class MainActivity extends Activity {
 
         String captured = ChatAccessibilityService.cachedTranscript();
         if (captured.length() > 0) {
-            sb.append('\n').append("最近抓取：").append(captured.length()).append(" 字");
+            String src = ChatAccessibilityService.captureSourceName();
+            sb.append('\n').append("最近读自：");
+            if (src.length() > 0) {
+                sb.append(src).append(" · ");
+            }
+            sb.append(captured.length()).append(" 字");
         } else {
             sb.append('\n').append("最近抓取：暂无（切到聊天窗口停一下再回来）");
         }

@@ -62,6 +62,42 @@ public class ChatAccessibilityService extends AccessibilityService {
         return cachedBands;
     }
 
+    /** 常见聊天 App 的包名，用于把"当前在读谁"讲成人话。 */
+    private static final String[][] KNOWN_APPS = {
+            {"com.tencent.mobileqq", "QQ"},
+            {"com.tencent.tim", "TIM"},
+            {"com.tencent.mm", "微信"},
+            {"com.tencent.wework", "企业微信"},
+            {"com.ss.android.lark", "飞书"},
+            {"com.alibaba.android.rimet", "钉钉"},
+            {"org.telegram.messenger", "Telegram"},
+            {"org.telegram.messenger.web", "Telegram"},
+            {"com.whatsapp", "WhatsApp"},
+            {"com.facebook.orca", "Messenger"},
+            {"com.instagram.android", "Instagram"},
+            {"com.discord", "Discord"},
+            {"jp.naver.line.android", "LINE"},
+    };
+
+    /**
+     * 最近一次抓到内容的 App 名。
+     *
+     * <p>没有任何包名白名单——读到谁就是谁。这个只用来在界面上告诉用户
+     * "刚才那一下读的是哪个窗口"，好让他确认方向对不对。
+     */
+    public static String captureSourceName() {
+        String pkg = lastCapturePkg;
+        if (pkg == null || pkg.length() == 0) {
+            return "";
+        }
+        for (String[] pair : KNOWN_APPS) {
+            if (pair[0].equals(pkg)) {
+                return pair[1];
+            }
+        }
+        return pkg;
+    }
+
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
         if (event == null) {
@@ -195,8 +231,16 @@ public class ChatAccessibilityService extends AccessibilityService {
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
         int width = dm.widthPixels;
-        int leftBand = (int) (width * 0.35);
-        int rightBand = (int) (width * 0.65);
+
+        // 分界点按当前屏幕的气泡分布现算，而不是写死屏宽百分比。
+        // 各家的气泡宽度和左右留白都不一样，固定阈值换个 App 就会把
+        // "我"和"对方"认反。算不出来时（样本太少、两簇挨得太近）退回固定值。
+        int split = dynamicSplit(lines, width);
+        boolean dynamic = split > 0;
+        if (!dynamic) {
+            split = width / 2;
+        }
+        int margin = Math.max(width / 20, (int) (12 * dm.density));
 
         int linesWanted = Prefs.contextLines(this);
         int from = Math.max(0, lines.size() - linesWanted);
@@ -211,11 +255,12 @@ public class ChatAccessibilityService extends AccessibilityService {
             previous = line.text;
 
             String speaker;
-            if (line.centerX <= leftBand) {
+            if (line.centerX < split - margin) {
                 speaker = "对方：";
-            } else if (line.centerX >= rightBand) {
+            } else if (line.centerX > split + margin) {
                 speaker = "我：";
             } else {
+                // 压在分界上的别猜，宁可不说
                 speaker = "";
             }
             if (sb.length() > 0) {
@@ -224,6 +269,50 @@ public class ChatAccessibilityService extends AccessibilityService {
             sb.append(speaker).append(line.text);
         }
         return sb.toString();
+    }
+
+    /**
+     * 用一维二聚类找出左右两组气泡的分界 x。
+     *
+     * <p>聊天界面的气泡天然分两簇（对方靠左、我方靠右），两簇中心的中点就是分界。
+     * 样本太少、或者两簇离得太近时返回 -1，让调用方退回固定阈值——总比硬猜要好。
+     */
+    private int dynamicSplit(List<Line> lines, int width) {
+        if (lines.size() < 4) {
+            return -1;
+        }
+        double lo = Double.MAX_VALUE;
+        double hi = -1;
+        for (Line l : lines) {
+            lo = Math.min(lo, l.centerX);
+            hi = Math.max(hi, l.centerX);
+        }
+        // 两簇几乎重合，说明这个界面本来就不分左右（比如全宽的列表），别硬分
+        if (hi - lo < width * 0.15) {
+            return -1;
+        }
+
+        for (int iter = 0; iter < 12; iter++) {
+            double s1 = 0;
+            double s2 = 0;
+            int n1 = 0;
+            int n2 = 0;
+            for (Line l : lines) {
+                if (Math.abs(l.centerX - lo) <= Math.abs(l.centerX - hi)) {
+                    s1 += l.centerX;
+                    n1++;
+                } else {
+                    s2 += l.centerX;
+                    n2++;
+                }
+            }
+            if (n1 == 0 || n2 == 0) {
+                return -1;
+            }
+            lo = s1 / n1;
+            hi = s2 / n2;
+        }
+        return (int) ((lo + hi) / 2);
     }
 
     private static void recycleSafely(AccessibilityNodeInfo node) {
