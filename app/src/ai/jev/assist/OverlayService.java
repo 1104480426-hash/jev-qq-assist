@@ -646,18 +646,30 @@ public class OverlayService extends Service {
         View header = cardView.findViewById(R.id.card_header);
         header.setOnTouchListener(new CardDragListener(cardWidth));
 
-        cardView.findViewById(R.id.card_copy).setOnClickListener(new View.OnClickListener() {
+        cardView.findViewById(R.id.card_collapse).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                copyCardToClipboard();
+                collapseToBall();
             }
         });
         cardView.findViewById(R.id.card_again).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 if (retryable || ChatAccessibilityService.cachedTranscript().length() > 0) {
+                    // 重判先退回球的形态，判定流程整条重走
+                    collapseToBall();
                     onBallTap();
                 }
+            }
+        });
+
+        // 长按整张卡片复制。原来这是个按钮，现在按钮位让给了「收起」：收起每次都要用，
+        // 复制偶尔才用，低频动作退到手势。
+        cardView.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                copyCardToClipboard();
+                return true;
             }
         });
 
@@ -668,6 +680,10 @@ public class OverlayService extends Service {
             return;
         }
         displayState = STATE_CARD;
+        // 卡片已经上屏，这时才让球让位。放在 addView 之前的话，一旦添加失败球就没了，
+        // 屏幕上什么都不剩。卡片是球展开后的形态，两个同时显示就变回"两个东西"，
+        // 它们的位置关系又得靠算法去猜，那正是之前别扭的来源。
+        removeBall();
         // 加进去之后才量得出它多高，这时才能把它摆到球旁边
         cardView.measure(
                 View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
@@ -676,13 +692,40 @@ public class OverlayService extends Service {
     }
 
     /**
-     * 卡片位置 = 悬浮球位置 + 相对偏移。
+     * 收起卡片，球回到卡片所在的位置。
      *
-     * <p>这样球一挪卡片就跟过去，展开态和胶囊的行为一致。用户没手动拖过卡片时，
-     * 偏移由代码算：贴在球背向屏幕中心的那一侧，垂直与球齐平。
+     * <p>两者共用一个中心，所以位置是连续的：在哪展开，就在哪收起，下次展开还在原处。
+     * 球的位置要写回偏好——卡片可能被拖过，拖动之后球就该从新地方出来。
+     */
+    private void collapseToBall() {
+        if (cardParams != null && cardView != null) {
+            int cardH = cardView.getMeasuredHeight();
+            if (cardH <= 0) {
+                cardH = (int) (190 * density);
+            }
+            int ballX = cardParams.x + cardParams.width / 2 - ballSizePx / 2;
+            int ballY = cardParams.y + cardH / 2 - ballSizePx / 2;
+            Prefs.setBallPos(this,
+                    Math.max(0, Math.min(screenW - ballSizePx, ballX)) / (float) screenW,
+                    Math.max(0, Math.min(screenH - ballSizePx, ballY)) / (float) screenH);
+        }
+        removeCard();
+        removePill();
+        showBall();
+    }
+
+    /**
+     * 卡片就长在球的位置上。
+     *
+     * <p>球和卡片不是两个东西，是同一个东西的两种形态：展开时球消失、卡片在它原来的
+     * 位置出现，收起时反过来。位置关系由构造保证，所以这里不做任何避让。之前那套
+     * "在屏幕上找一段空白"的逻辑因此失去了存在理由——而且它在密集聊天里必然失败
+     * （球旁边根本放不下整张卡片），结果是把卡片推到屏幕另一头，比压着字难看得多。
+     *
+     * <p>中心对齐之后再夹进屏幕内：球常贴在边缘，不夹的话卡片会有一半在屏幕外。
      */
     private void layoutCard() {
-        if (cardView == null || cardParams == null || ballView == null) {
+        if (cardView == null || cardParams == null) {
             return;
         }
         int cardW = cardParams.width;
@@ -690,65 +733,14 @@ public class OverlayService extends Service {
         if (cardH <= 0) {
             cardH = (int) (190 * density);
         }
-        int gap = (int) (PILL_GAP_DP * density);
 
-        if (Prefs.cardPinned(this)) {
-            cardParams.x = ballParams.x + (int) (Prefs.cardOffsetX(this) * screenW);
-            cardParams.y = ballParams.y + (int) (Prefs.cardOffsetY(this) * screenH);
-        } else {
-            // 横向仍贴着球那一侧，纵向交给避让：能放进空白就别压着消息
-            boolean ballOnLeft = ballParams.x + ballSizePx / 2 < screenW / 2;
-            cardParams.x = ballOnLeft
-                    ? ballParams.x + ballSizePx + gap
-                    : ballParams.x - cardW - gap;
+        int ballCx = ballParams.x + ballSizePx / 2;
+        int ballCy = ballParams.y + ballSizePx / 2;
+        cardParams.x = ballCx - cardW / 2;
+        cardParams.y = ballCy - cardH / 2;
 
-            int clearTop = findClearBand(cardH);
-            cardParams.y = clearTop >= 0 ? clearTop : ballParams.y + (ballSizePx - cardH) / 2;
-        }
         clampCardInside(cardW);
         moveView(cardView, cardParams);
-    }
-
-    /**
-     * 在屏幕上找一段能放下整个卡片的空白，返回它的顶部 y；找不到返回 -1。
-     *
-     * <p>做法是把屏幕按 60dp 切成段，用读屏服务记下的文本行区间把这些段标成"有字"，
-     * 然后从上往下找第一段连续空白。之所以从上往下，是因为聊天窗口最新的消息在底部，
-     * 挡住那里最难受——上面都是翻过去的旧消息。
-     */
-    private int findClearBand(int cardH) {
-        java.util.List<int[]> bands = ChatAccessibilityService.recentTextBands();
-        if (bands == null || bands.isEmpty() || screenH <= 0) {
-            return -1;
-        }
-
-        int seg = Math.max(1, (int) (60 * density));
-        int segs = screenH / seg + 1;
-        boolean[] occupied = new boolean[segs];
-        for (int[] b : bands) {
-            if (b == null || b.length < 2) {
-                continue;
-            }
-            int from = Math.max(0, b[0] / seg);
-            int to = Math.min(segs - 1, b[1] / seg);
-            for (int i = from; i <= to; i++) {
-                occupied[i] = true;
-            }
-        }
-
-        int need = cardH / seg + 1;
-        int run = 0;
-        for (int i = 0; i < segs; i++) {
-            if (occupied[i]) {
-                run = 0;
-                continue;
-            }
-            run++;
-            if (run >= need) {
-                return (i - run + 1) * seg;
-            }
-        }
-        return -1;
     }
 
     private void clampCardInside(int cardWidth) {

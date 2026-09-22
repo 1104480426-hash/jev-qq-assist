@@ -80,14 +80,14 @@
             android:textStyle="bold" />
 
         <Button
-            android:id="@+id/card_copy"
+            android:id="@+id/card_collapse"
             android:layout_width="0dp"
             android:layout_height="38dp"
             android:layout_marginLeft="8dp"
             android:layout_weight="1"
             android:background="@drawable/bg_btn_ghost"
             android:letterSpacing="0.02"
-            android:text="复制"
+            android:text="收起"
             android:textAllCaps="false"
             android:textColor="#FF0E8C74"
             android:textSize="13sp"
