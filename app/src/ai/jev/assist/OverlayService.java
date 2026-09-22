@@ -239,9 +239,12 @@ public class OverlayService extends Service {
                     ballParams.y = startY + dy;
                     clampBallInside();
                     moveView(ballView, ballParams);
-                    // 胶囊贴着球，球一动它跟着动
+                    // 胶囊和卡片都挂在球上，球一动它们跟着走
                     if (pillView != null) {
                         layoutPill();
+                    }
+                    if (cardView != null) {
+                        layoutCard();
                     }
                     return true;
                 }
@@ -287,6 +290,9 @@ public class OverlayService extends Service {
                 moveView(ballView, ballParams);
                 if (pillView != null) {
                     layoutPill();
+                }
+                if (cardView != null) {
+                    layoutCard();
                 }
             }
         });
@@ -546,10 +552,6 @@ public class OverlayService extends Service {
                 PixelFormat.TRANSLUCENT);
         cardParams.gravity = Gravity.TOP | Gravity.START;
 
-        cardParams.x = (int) (Prefs.cardX(this) * screenW) - cardWidth / 2;
-        cardParams.y = (int) (Prefs.cardY(this) * screenH);
-        clampCardInside(cardWidth);
-
         View header = cardView.findViewById(R.id.card_header);
         header.setOnTouchListener(new CardDragListener(cardWidth));
 
@@ -584,7 +586,44 @@ public class OverlayService extends Service {
             windowManager.addView(cardView, cardParams);
         } catch (Exception e) {
             cardView = null;
+            return;
         }
+        // 加进去之后才量得出它多高，这时才能把它摆到球旁边
+        cardView.measure(
+                View.MeasureSpec.makeMeasureSpec(cardWidth, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED));
+        layoutCard();
+    }
+
+    /**
+     * 卡片位置 = 悬浮球位置 + 相对偏移。
+     *
+     * <p>这样球一挪卡片就跟过去，展开态和胶囊的行为一致。用户没手动拖过卡片时，
+     * 偏移由代码算：贴在球背向屏幕中心的那一侧，垂直与球齐平。
+     */
+    private void layoutCard() {
+        if (cardView == null || cardParams == null || ballView == null) {
+            return;
+        }
+        int cardW = cardParams.width;
+        int cardH = cardView.getMeasuredHeight();
+        if (cardH <= 0) {
+            cardH = (int) (190 * density);
+        }
+        int gap = (int) (PILL_GAP_DP * density);
+
+        if (Prefs.cardPinned(this)) {
+            cardParams.x = ballParams.x + (int) (Prefs.cardOffsetX(this) * screenW);
+            cardParams.y = ballParams.y + (int) (Prefs.cardOffsetY(this) * screenH);
+        } else {
+            boolean ballOnLeft = ballParams.x + ballSizePx / 2 < screenW / 2;
+            cardParams.x = ballOnLeft
+                    ? ballParams.x + ballSizePx + gap
+                    : ballParams.x - cardW - gap;
+            cardParams.y = ballParams.y + (ballSizePx - cardH) / 2;
+        }
+        clampCardInside(cardW);
+        moveView(cardView, cardParams);
     }
 
     private void clampCardInside(int cardWidth) {
@@ -631,9 +670,10 @@ public class OverlayService extends Service {
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
                     if (moved && screenW > 0 && screenH > 0) {
-                        Prefs.setCardPos(OverlayService.this,
-                                (cardParams.x + cardWidth / 2f) / screenW,
-                                cardParams.y / (float) screenH);
+                        // 记的是相对球的偏移，不是绝对坐标：以后球挪到哪，卡片跟到哪
+                        Prefs.setCardOffset(OverlayService.this,
+                                (cardParams.x - ballParams.x) / (float) screenW,
+                                (cardParams.y - ballParams.y) / (float) screenH);
                     }
                     return true;
                 default:

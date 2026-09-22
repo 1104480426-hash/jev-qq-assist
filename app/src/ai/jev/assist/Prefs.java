@@ -93,12 +93,12 @@ public final class Prefs {
 
     // ---- 悬浮球与卡片的位置 ----
     // 存的是相对屏幕的比例而不是像素，换分辨率、转屏之后位置依然合理。
-    // -1 表示还没被用户拖过，用代码里的默认值。
 
     private static final String K_BALL_X = "ball_x";
     private static final String K_BALL_Y = "ball_y";
-    private static final String K_CARD_X = "card_x";
-    private static final String K_CARD_Y = "card_y";
+    private static final String K_CARD_DX = "card_dx";
+    private static final String K_CARD_DY = "card_dy";
+    private static final String K_CARD_PINNED = "card_pinned";
 
     public static float ballX(Context c) {
         return sp(c).getFloat(K_BALL_X, 0.02f);
@@ -112,23 +112,37 @@ public final class Prefs {
         sp(c).edit().putFloat(K_BALL_X, clamp(x)).putFloat(K_BALL_Y, clamp(y)).apply();
     }
 
-    /** 卡片默认靠上，因为聊天窗口的最新消息在底部，压住它最难受。 */
-    public static float cardX(Context c) {
-        return sp(c).getFloat(K_CARD_X, 0.5f);
+    /**
+     * 卡片相对悬浮球的偏移，按屏幕比例存。
+     *
+     * <p>存相对量而不是绝对坐标，是为了让卡片始终跟着球走：球一挪，卡片按同样的
+     * 偏移跟过去。没有 pinned 标记时表示用户还没手动拖过卡片，此时由代码把它贴在
+     * 球的侧面。
+     */
+    public static boolean cardPinned(Context c) {
+        return sp(c).getBoolean(K_CARD_PINNED, false);
     }
 
-    public static float cardY(Context c) {
-        return sp(c).getFloat(K_CARD_Y, 0.12f);
+    public static float cardOffsetX(Context c) {
+        return sp(c).getFloat(K_CARD_DX, 0f);
     }
 
-    public static void setCardPos(Context c, float x, float y) {
-        sp(c).edit().putFloat(K_CARD_X, clamp(x)).putFloat(K_CARD_Y, clamp(y)).apply();
+    public static float cardOffsetY(Context c) {
+        return sp(c).getFloat(K_CARD_DY, 0f);
+    }
+
+    public static void setCardOffset(Context c, float dx, float dy) {
+        sp(c).edit()
+                .putFloat(K_CARD_DX, dx)
+                .putFloat(K_CARD_DY, dy)
+                .putBoolean(K_CARD_PINNED, true)
+                .apply();
     }
 
     private static float clamp(float v) {
         if (Float.isNaN(v)) {
             return 0f;
         }
-        return Math.max(0f, Math.min(1f, v));
+        return Math.max(-1f, Math.min(1f, v));
     }
 }
