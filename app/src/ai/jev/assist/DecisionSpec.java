@@ -377,7 +377,7 @@ public final class DecisionSpec {
         // 第二句：怎么做。措辞要和标题岔开——标题已经把结论说了，
         // 这里再复述一遍"简短回一句"就只剩啰嗦。
         if ("warm_comfort".equals(strategy)) {
-            sb.append("先说一句安抚的话，让对方的感受有落点。");
+            sb.append("先说一句安抚的话，让他知道你听进去了。");
         } else if ("explain_facts".equals(strategy)) {
             sb.append("把原因或实情讲明白，不用绕。");
         } else if ("playful".equals(strategy)) {
@@ -394,13 +394,23 @@ public final class DecisionSpec {
         return sb.toString();
     }
 
-    /** 依据：原始判定压成一行小字，想深究的人能看，不想看的人可以忽略。 */
+    /**
+     * 依据：只留标题和正文里给不出的两项。
+     *
+     * <p>原来这里摆着五项原始判定（情绪 1.55/3、踩雷风险 88%、对方在等回复、对方意图
+     * 倾诉情绪）。麻烦在于头两项在正文第一句里已经用人话说过了——「对方已经不太高兴了，
+     * 只是想找个人说说」说的就是情绪和意图。同一件事说两遍，还要让用户去猜「1.55/3」
+     * 是个什么分数、「意图」是个什么词，白占一行小字。
+     *
+     * <p>留下的两项是别处都没有的：这条要不要现在回，以及回得不好会怎样。它们也直接
+     * 对应两个最常被问的问题——"要不要马上回"和"回错了要紧吗"。
+     */
     static String evidence(JSONObject answers) {
         StringBuilder sb = new StringBuilder();
 
-        double tension = score(answers, "tension");
-        if (tension >= 0) {
-            sb.append("情绪 ").append(trimNum(tension)).append('/').append(SCORE_LEGEND.length - 1);
+        double awaiting = noul(answers, "awaiting_reply");
+        if (awaiting >= 0) {
+            sb.append(awaiting >= 0.5 ? "对方在等你回" : "对方没在等");
         }
 
         double risk = noul(answers, "risk");
@@ -408,26 +418,7 @@ public final class DecisionSpec {
             if (sb.length() > 0) {
                 sb.append(" · ");
             }
-            sb.append("踩雷风险 ").append(Math.round(risk * 100)).append('%');
-        }
-
-        double awaiting = noul(answers, "awaiting_reply");
-        if (awaiting >= 0) {
-            if (sb.length() > 0) {
-                sb.append(" · ");
-            }
-            sb.append(awaiting >= 0.5 ? "对方在等回复" : "对方没在等");
-        }
-
-        // 报意图，不报策略。标题本来就是从意图和策略共同推出来的结论，末段再复述一遍
-        // 「判定策略 共情安抚」，和标题「先听完，别讲道理」说的是同一件事，等于没报。
-        // 而意图是标题的主要依据，用户看不到它就无从判断这条建议是从哪来的。
-        String intent = choice(answers, "intent");
-        if (intent.length() > 0 && !"?".equals(intent)) {
-            if (sb.length() > 0) {
-                sb.append(" · ");
-            }
-            sb.append("对方意图 ").append(zhValue(intent));
+            sb.append(risk >= 0.6 ? "这句回不好容易变味" : "随便回一句也没关系");
         }
 
         return sb.toString();
