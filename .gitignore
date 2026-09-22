@@ -20,3 +20,5 @@ tools/probe_py.txt
 # keep the bundled demo page (only the model dir is fetched)
 !app/assets/demo-chat.html
 
+# 调试时的过程截图，不要入库
+docs/_*.png
