@@ -771,10 +771,10 @@ public class ChatAccessibilityService extends AccessibilityService {
         }
         int margin = Math.max(width / 20, (int) (12 * dm.density));
 
-        // 位置 -> 左右归属，昵称缺失时用它兜底
-        java.util.Map<Integer, Integer> xByTop = new java.util.HashMap<>();
+        // 位置 -> 这一行的几何数据，昵称缺失时用它兜底
+        java.util.Map<Integer, Line> lineByTop = new java.util.HashMap<>();
         for (Line l : lines) {
-            xByTop.put(l.top, l.centerX);
+            lineByTop.put(l.top, l);
         }
 
         int wanted = Prefs.contextLines(this);
@@ -789,17 +789,25 @@ public class ChatAccessibilityService extends AccessibilityService {
             }
             previous = m.text;
 
-            Integer cx = xByTop.get(m.top);
-            int mx = cx == null ? split : cx;
+            Line origin = lineByTop.get(m.top);
+            int mx = origin == null ? split : origin.centerX;
+            int mleft = origin == null ? 0 : origin.left;
 
             String who;
             if (groupChat && m.speaker.length() > 0) {
                 // 群聊：直接用昵称，让判定模型分得清谁是谁
                 who = m.speaker + "：";
-            } else if (Math.abs(mx - width / 2) < width * 0.05) {
+            } else if (Math.abs(mx - width / 2) < width * 0.05 && mleft > width * 0.20) {
                 // 水平居中的是系统提示（「全员禁言中，仅群主和管理员可发言」
                 // 「你撤回了一条消息」这类），不属于任何一方。放在署名之后判断：
                 // 有署名的消息即使位置居中，那个署名也比位置可信。
+                //
+                // left 必须一起看。对方发一条长消息时气泡会横跨到屏幕中间，它的
+                // centerX 同样落进中线附近——实测「没事，就是今天那事我心里有点不
+                // 舒服」centerX 531、中线 540，差 9 像素就被判成系统提示，转录里
+                // 整条丢掉说话人，而它恰好是情绪转折的那一句。消息气泡永远贴着它
+                // 那一侧的边缘（该次实测 left 恒为 147），真正居中的系统提示左右
+                // 留白对称，left 一定更靠里。
                 who = "";
             } else if (groupChat) {
                 // 群聊里没认出署名的那些。这个场景下"左边是对方、右边是我"不成立：
