@@ -147,9 +147,19 @@
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/bg_btn_primary"
-            android:text="查看演示模式 · 私聊（虚构对话）"
+            android:text="演示 · 私聊（有情绪）"
             android:textAllCaps="false"
             android:textColor="#FFFFFFFF" />
+
+        <Button
+            android:id="@+id/demo_calm"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_btn_ghost"
+            android:text="演示 · 私聊（日常）"
+            android:textAllCaps="false"
+            android:textColor="#FF1C1C1E" />
 
         <Button
             android:id="@+id/demo_group"
@@ -157,7 +167,7 @@
             android:layout_height="46dp"
             android:layout_marginTop="8dp"
             android:background="@drawable/bg_btn_ghost"
-            android:text="查看演示模式 · 群聊（虚构对话）"
+            android:text="演示 · 群聊"
             android:textAllCaps="false"
             android:textColor="#FF1C1C1E" />
 

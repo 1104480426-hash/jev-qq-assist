@@ -71,16 +71,21 @@ public class MainActivity extends Activity {
         findViewById(R.id.demo).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                startActivity(new Intent(MainActivity.this, DemoActivity.class));
+                openDemo("private");
+            }
+        });
+
+        findViewById(R.id.demo_calm).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openDemo("calm");
             }
         });
 
         findViewById(R.id.demo_group).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent intent = new Intent(MainActivity.this, DemoActivity.class);
-                intent.putExtra(DemoActivity.EXTRA_GROUP, true);
-                startActivity(intent);
+                openDemo("group");
             }
         });
 
@@ -408,6 +413,13 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             outputView.setText("跳转无障碍设置失败：" + e.getMessage());
         }
+    }
+
+    /** 打开演示页。三份页面分别对应有情绪的私聊、日常私聊、群聊。 */
+    private void openDemo(String page) {
+        Intent intent = new Intent(MainActivity.this, DemoActivity.class);
+        intent.putExtra(DemoActivity.EXTRA_PAGE, page);
+        startActivity(intent);
     }
 
     private void runTest() {
