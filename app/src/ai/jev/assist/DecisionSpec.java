@@ -395,15 +395,15 @@ public final class DecisionSpec {
     }
 
     /**
-     * 依据：只留标题和正文里给不出的两项。
+     * 依据行：这一行的意义是把"结论是从概率里读出来的"摆出来。
      *
-     * <p>原来这里摆着五项原始判定（情绪 1.55/3、踩雷风险 88%、对方在等回复、对方意图
-     * 倾诉情绪）。麻烦在于头两项在正文第一句里已经用人话说过了——「对方已经不太高兴了，
-     * 只是想找个人说说」说的就是情绪和意图。同一件事说两遍，还要让用户去猜「1.55/3」
-     * 是个什么分数、「意图」是个什么词，白占一行小字。
+     * <p>所以每一项都带 Jev 给的数：noul 给概率，score 给量表分。没有这些数，卡片就退化
+     * 成一段普通的沟通建议——「先听完，别讲道理」跟网上任何一篇技巧文章都分不出彼此。
+     * 有数字才看得出它是模型算的，而不是谁写的经验之谈。
      *
-     * <p>留下的两项是别处都没有的：这条要不要现在回，以及回得不好会怎样。它们也直接
-     * 对应两个最常被问的问题——"要不要马上回"和"回错了要紧吗"。
+     * <p>但数得跟人话一起出现：只说「踩雷风险 88%」没人知道踩什么雷，只说「这句回不好
+     * 容易变味」又丢了 88%。两者并排，用户既能懂，又能看出模型有多确定。原来的
+     * 「对方意图 倾诉情绪」是纯术语，既没有数也没说人话，那种才该去。
      */
     static String evidence(JSONObject answers) {
         StringBuilder sb = new StringBuilder();
@@ -411,6 +411,7 @@ public final class DecisionSpec {
         double awaiting = noul(answers, "awaiting_reply");
         if (awaiting >= 0) {
             sb.append(awaiting >= 0.5 ? "对方在等你回" : "对方没在等");
+            sb.append(' ').append(pct(awaiting));
         }
 
         double risk = noul(answers, "risk");
@@ -419,6 +420,15 @@ public final class DecisionSpec {
                 sb.append(" · ");
             }
             sb.append(risk >= 0.6 ? "这句回不好容易变味" : "随便回一句也没关系");
+            sb.append(' ').append(pct(risk));
+        }
+
+        double tension = score(answers, "tension");
+        if (tension >= 0) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append("情绪 ").append(trimNum(tension)).append('/').append(SCORE_LEGEND.length - 1);
         }
 
         return sb.toString();
