@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 胶囊材质：和卡片同一套 iOS 玻璃，只是更小 -->
+<!-- 胶囊材质：和卡片同一套玻璃，透明度保持一致 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#F7FFFFFF" />
+            <solid android:color="#E0FFFFFF" />
             <corners android:radius="25dp" />
         </shape>
     </item>
@@ -11,8 +11,8 @@
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
-                android:startColor="#3DFFFFFF"
-                android:centerColor="#0FFFFFFF"
+                android:startColor="#45FFFFFF"
+                android:centerColor="#16FFFFFF"
                 android:endColor="#00FFFFFF"
                 android:type="linear" />
             <corners android:radius="25dp" />
@@ -20,7 +20,7 @@
     </item>
     <item>
         <shape android:shape="rectangle">
-            <stroke android:width="0.5dp" android:color="#99FFFFFF" />
+            <stroke android:width="0.5dp" android:color="#A6FFFFFF" />
             <corners android:radius="25dp" />
         </shape>
     </item>

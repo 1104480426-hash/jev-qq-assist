@@ -1,52 +1,72 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  判定卡片 —— iOS Liquid Glass 材质（纯分层实现，不依赖系统模糊）。
+  判定卡片 —— iOS Liquid Glass 材质（纯分层，不依赖系统模糊）。
 
   为什么不用 FLAG_BLUR_BEHIND：它在 HyperOS 上的作用范围不稳定，同样的窗口参数
-  有时只糊卡片背后、有时糊满全屏，把聊天界面一起糊掉。所以玻璃感全部由这一层出：
+  有时只糊卡片背后、有时糊满全屏，把聊天界面一起糊掉。
 
-    1) 高不透明度的白底   —— 保证判定文字在任何背景上都读得清
-    2) 顶部向下衰减的白渐变 —— 受光面，iOS 玻璃的纵深感
-    3) 底部极淡的冷灰     —— 免得整块死白
+  没有背景模糊，毛玻璃感就靠这几层凑：
+    1) 88% 的白底 —— 背后的聊天气泡会朦胧透出来，被"洗"成一层雾，这就是糊的观感
+    2) 顶部到底部的受光渐变 —— 玻璃的纵深
+    3) 底部极淡的冷灰 —— 免得整块死白，也带一点 iOS 材料的冷调
     4) 上半圈更亮的白描边 —— 折射边
+    5) 边缘内暗角 —— 玻璃的厚度感
 
-  半透明度定在 96%：再透一点就会和背后的聊天文字糊在一起。
+  88% 是权衡出来的：再透，正文和背后的字就开始互相干扰；再实，就成了一块塑料板。
+  QQ 的聊天背景是浅色，所以透出来的内容对比度低，这个值在有内容的背景上仍然读得清。
 -->
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!-- 雾面白底 -->
     <item>
         <shape android:shape="rectangle">
-            <solid android:color="#F5FFFFFF" />
+            <solid android:color="#E0FFFFFF" />
             <corners android:radius="26dp" />
         </shape>
     </item>
 
+    <!-- 受光面 -->
     <item>
         <shape android:shape="rectangle">
             <gradient
                 android:angle="270"
-                android:startColor="#3DFFFFFF"
-                android:centerColor="#14FFFFFF"
+                android:startColor="#45FFFFFF"
+                android:centerColor="#16FFFFFF"
                 android:endColor="#00FFFFFF"
                 android:type="linear" />
             <corners android:radius="26dp" />
         </shape>
     </item>
 
+    <!-- 冷调下摆 -->
     <item>
         <shape android:shape="rectangle">
             <gradient
                 android:angle="90"
-                android:startColor="#0F8E8E93"
+                android:startColor="#128E8E93"
                 android:endColor="#008E8E93"
                 android:type="linear" />
             <corners android:radius="26dp" />
         </shape>
     </item>
 
+    <!-- 内暗角：靠边缘一圈压暗一点，玻璃才有厚度 -->
     <item>
         <shape android:shape="rectangle">
-            <stroke android:width="0.5dp" android:color="#99FFFFFF" />
+            <gradient
+                android:angle="270"
+                android:startColor="#00000000"
+                android:endColor="#0F000000"
+                android:type="linear" />
+            <corners android:radius="26dp" />
+            <size android:height="26dp" />
+        </shape>
+    </item>
+
+    <!-- 折射边 -->
+    <item>
+        <shape android:shape="rectangle">
+            <stroke android:width="0.5dp" android:color="#A6FFFFFF" />
             <corners android:radius="26dp" />
         </shape>
     </item>
