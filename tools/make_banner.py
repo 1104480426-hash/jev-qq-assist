@@ -109,7 +109,7 @@ def main():
         d.text((x + 16, 372 + 10), c, font=f, fill=ACCENT_SOFT)
         x += cw + 10
 
-    d.text((80, 452), "github.com/1104480426-hash/jev-qq-assist",
+    d.text((80, 452), "github.com/1104480426-hash/jev-wingman",
            font=font(18, bold=False), fill=(96, 122, 117))
 
     # ---- 右侧：真实截图 ----
