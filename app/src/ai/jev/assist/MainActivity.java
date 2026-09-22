@@ -1,0 +1,363 @@
+package ai.jev.assist;
+
+import android.app.Activity;
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.Settings;
+import android.text.TextUtils;
+import android.view.View;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.TextView;
+
+import org.json.JSONObject;
+
+/** 设置与自检界面。 */
+public class MainActivity extends Activity {
+
+    private EditText endpointBox;
+    private EditText modelBox;
+    private EditText keyBox;
+    private EditText linesBox;
+    private TextView statusView;
+    private TextView outputView;
+    private Button toggleButton;
+    private Button modeButton;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        endpointBox = (EditText) findViewById(R.id.endpoint);
+        modelBox = (EditText) findViewById(R.id.model);
+        keyBox = (EditText) findViewById(R.id.apikey);
+        linesBox = (EditText) findViewById(R.id.lines);
+        statusView = (TextView) findViewById(R.id.status);
+        outputView = (TextView) findViewById(R.id.output);
+        toggleButton = (Button) findViewById(R.id.toggle);
+
+        endpointBox.setText(Prefs.endpoint(this));
+        modelBox.setText(Prefs.model(this));
+        keyBox.setText(Prefs.apiKey(this));
+        linesBox.setText(String.valueOf(Prefs.contextLines(this)));
+
+        findViewById(R.id.save).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                save();
+                refreshStatus();
+                outputView.setText("已保存。");
+            }
+        });
+
+        findViewById(R.id.test).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                save();
+                runTest();
+            }
+        });
+
+        modeButton = (Button) findViewById(R.id.mode);
+        modeButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Prefs.setMode(MainActivity.this,
+                        Prefs.isLocal(MainActivity.this) ? Prefs.MODE_REMOTE : Prefs.MODE_LOCAL);
+                refreshStatus();
+            }
+        });
+
+        findViewById(R.id.localcheck).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                runLocalCheck();
+            }
+        });
+
+        findViewById(R.id.accessibility).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openAccessibilitySettings();
+            }
+        });
+
+        toggleButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                save();
+                if (OverlayService.running) {
+                    startService(new Intent(MainActivity.this, OverlayService.class)
+                            .setAction(OverlayService.ACTION_STOP));
+                } else {
+                    if (!canOverlay()) {
+                        requestOverlay();
+                        return;
+                    }
+                    Intent intent = new Intent(MainActivity.this, OverlayService.class);
+                    intent.setAction(OverlayService.ACTION_START);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        startForegroundService(intent);
+                    } else {
+                        startService(intent);
+                    }
+                }
+                statusView.postDelayed(new Runnable() {
+                    @Override
+                    public void run() {
+                        refreshStatus();
+                    }
+                }, 400);
+            }
+        });
+
+        requestNotificationPermissionIfNeeded();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        refreshStatus();
+    }
+
+    private void save() {
+        Prefs.setEndpoint(this, endpointBox.getText().toString());
+        Prefs.setModel(this, modelBox.getText().toString());
+        Prefs.setApiKey(this, keyBox.getText().toString());
+        String lines = linesBox.getText().toString().trim();
+        if (!TextUtils.isEmpty(lines)) {
+            try {
+                Prefs.setContextLines(this, Integer.parseInt(lines));
+            } catch (NumberFormatException ignored) {
+                // 保持原值
+            }
+        }
+        linesBox.setText(String.valueOf(Prefs.contextLines(this)));
+    }
+
+    private void refreshStatus() {
+        boolean overlay = canOverlay();
+        boolean a11y = isAccessibilityOn();
+        StringBuilder sb = new StringBuilder();
+        sb.append("悬浮窗权限：").append(overlay ? "已授予" : "未授予");
+        sb.append('\n').append("读屏无障碍：").append(a11y ? "已开启" : "未开启");
+        sb.append('\n').append("悬浮球：").append(OverlayService.running ? "运行中" : "未运行");
+        sb.append('\n').append("判定模式：").append(
+                Prefs.isLocal(this) ? "本地（模型在手机里，不联网）" : "远端 Jev 兼容端点");
+
+        String loadErr = LocalJudge.loadError();
+        if (loadErr != null) {
+            sb.append('\n').append("本地模型：加载失败 · ").append(loadErr);
+        } else if (LocalJudge.peek() != null) {
+            sb.append('\n').append("本地模型：已就绪");
+        } else {
+            sb.append('\n').append("本地模型：未加载（首次判定时自动加载）");
+        }
+
+        String captured = ChatAccessibilityService.cachedTranscript();
+        if (captured.length() > 0) {
+            sb.append('\n').append("最近抓取：").append(captured.length()).append(" 字");
+        } else {
+            sb.append('\n').append("最近抓取：暂无（切到聊天窗口停一下再回来）");
+        }
+        statusView.setText(sb.toString());
+        toggleButton.setText(OverlayService.running ? "停止悬浮球" : "启动悬浮球");
+        modeButton.setText("切换判定模式（当前："
+                + (Prefs.isLocal(this) ? "本地" : "远端") + "）");
+    }
+
+    /** 加载本地模型并跑一次自检，全程在后台线程。 */
+    private void runLocalCheck() {
+        outputView.setText("正在加载本地模型（23MB，首次约需几秒）…");
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                final long started = System.currentTimeMillis();
+                try {
+                    LocalJudge judge = LocalJudge.get(getApplicationContext());
+                    final long loadMs = System.currentTimeMillis() - started;
+
+                    LocalDecisionSpec.Question probe = LocalDecisionSpec.QUESTIONS[1];
+                    String sample = "对方：你这两天怎么回事，消息也不回\n我：在忙\n对方：忙什么，比我还忙吗";
+                    long t2 = System.currentTimeMillis();
+                    final JSONObject answers = judge.judge(sample);
+                    final long judgeMs = System.currentTimeMillis() - t2;
+
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            outputView.setText("本地模型加载完成 · " + loadMs + " ms"
+                                    + "\n本次判定耗时 " + judgeMs + " ms"
+                                    + "\n\n" + DecisionSpec.headline(answers)
+                                    + "\n\n" + DecisionSpec.renderAll(answers));
+                            refreshStatus();
+                        }
+                    });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            outputView.setText("本地模型加载失败："
+                                    + e.getClass().getSimpleName() + ": " + e.getMessage()
+                                    + "\n\n--- assets 诊断 ---\n" + diagnoseAssets());
+                            refreshStatus();
+                        }
+                    });
+                }
+            }
+        }, "jev-local-check").start();
+    }
+
+    /** 打印 assets 树并逐个试 open，用于定位资源找不到的真实原因。 */
+    private String diagnoseAssets() {
+        StringBuilder sb = new StringBuilder();
+        String[] dirs = {"", "models", "models/bge-small-zh"};
+        for (String dir : dirs) {
+            try {
+                String[] list = getAssets().list(dir);
+                sb.append(dir.length() == 0 ? "/" : dir).append(" -> ")
+                        .append(list == null ? "null" : java.util.Arrays.toString(list))
+                        .append('\n');
+            } catch (Exception e) {
+                sb.append(dir).append(" -> list 失败 ").append(e).append('\n');
+            }
+        }
+        String[] files = {
+                "models/bge-small-zh/vocab.txt",
+                "models/bge-small-zh/config.json",
+                "models/bge-small-zh/model_quantized.onnx",
+        };
+        for (String path : files) {
+            java.io.InputStream in = null;
+            try {
+                in = getAssets().open(path);
+                sb.append("open ").append(path).append(" -> OK (first byte ")
+                        .append(in.read()).append(")\n");
+            } catch (Exception e) {
+                sb.append("open ").append(path).append(" -> ")
+                        .append(e.getClass().getSimpleName()).append('\n');
+            } finally {
+                try {
+                    if (in != null) {
+                        in.close();
+                    }
+                } catch (Exception ignored) {
+                    // 忽略关闭异常
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    private boolean canOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            return Settings.canDrawOverlays(this);
+        }
+        return true;
+    }
+
+    private void requestOverlay() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            Intent intent = new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                    Uri.parse("package:" + getPackageName()));
+            try {
+                startActivity(intent);
+                outputView.setText("请在系统里允许「显示在其他应用上层」，然后回来再点启动。");
+            } catch (Exception e) {
+                outputView.setText("跳转悬浮窗设置失败：" + e.getMessage());
+            }
+        }
+    }
+
+    private boolean isAccessibilityOn() {
+        String enabled = Settings.Secure.getString(getContentResolver(),
+                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        if (enabled == null) {
+            return false;
+        }
+        String me = new ComponentName(this, ChatAccessibilityService.class).flattenToString();
+        String meShort = new ComponentName(this, ChatAccessibilityService.class).flattenToShortString();
+        return enabled.contains(me) || enabled.contains(meShort);
+    }
+
+    private void openAccessibilitySettings() {
+        try {
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+            outputView.setText("在无障碍列表里找到「Jev 聊天参谋」并打开。");
+        } catch (Exception e) {
+            outputView.setText("跳转无障碍设置失败：" + e.getMessage());
+        }
+    }
+
+    private void runTest() {
+        final String sample = ChatAccessibilityService.cachedTranscript().length() > 0
+                ? ChatAccessibilityService.cachedTranscript()
+                : "对方：你这两天怎么回事，消息也不回\n我：在忙\n对方：忙什么，比我还忙吗";
+        outputView.setText("判定中…");
+        final String endpoint = Prefs.endpoint(this);
+        final String model = Prefs.model(this);
+        final String key = Prefs.apiKey(this);
+        final boolean local = Prefs.isLocal(this);
+
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    final JSONObject answers;
+                    final String meta;
+                    if (local) {
+                        LocalJudge judge = LocalJudge.get(getApplicationContext());
+                        long t = System.currentTimeMillis();
+                        answers = judge.judge(sample);
+                        meta = "本地 bge-small-zh · " + (System.currentTimeMillis() - t) + " ms";
+                    } else {
+                        JevClient.Result result = JevClient.decide(endpoint, key,
+                                DecisionSpec.build(model, sample));
+                        if (!result.ok) {
+                            final String err = result.error;
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    outputView.setText("判定失败：" + err + "\n\n端点：" + endpoint);
+                                }
+                            });
+                            return;
+                        }
+                        answers = result.answers;
+                        meta = "远端 " + result.model + " · " + result.elapsedMs + " ms";
+                    }
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            outputView.setText(DecisionSpec.headline(answers) + "\n\n"
+                                    + DecisionSpec.renderAll(answers) + "\n\n" + meta);
+                        }
+                    });
+                } catch (final Exception e) {
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            outputView.setText("判定异常：" + e.getClass().getSimpleName()
+                                    + ": " + e.getMessage());
+                        }
+                    });
+                }
+            }
+        }, "jev-test").start();
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33) {
+            try {
+                requestPermissions(new String[]{"android.permission.POST_NOTIFICATIONS"}, 1);
+            } catch (Exception ignored) {
+                // 拒绝也不影响判定
+            }
+        }
+    }
+}

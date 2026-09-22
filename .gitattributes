@@ -1,0 +1,13 @@
+# Normalize line endings so clones on any platform behave the same.
+* text=auto eol=lf
+
+# PowerShell scripts stay CRLF; Windows PowerShell 5.1 is happiest with them that way.
+*.ps1 text eol=crlf
+
+# Binary / fetched artifacts
+*.so   binary
+*.onnx binary
+*.aar  binary
+*.jar  binary
+*.apk  binary
+*.png  binary

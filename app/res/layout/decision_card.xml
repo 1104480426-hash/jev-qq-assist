@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="300dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bg_card"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:id="@+id/card_headline"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="建议：—"
+        android:textColor="#FF2BC4A0"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/card_body"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:lineSpacingExtra="3dp"
+        android:text=""
+        android:textColor="#FFE6E9EC"
+        android:textSize="13sp" />
+
+    <TextView
+        android:id="@+id/card_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="10dp"
+        android:text=""
+        android:textColor="#FF8A939B"
+        android:textSize="10sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="horizontal">
+
+        <Button
+            android:id="@+id/card_again"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="#222BC4A0"
+            android:text="重判"
+            android:textAllCaps="false"
+            android:textColor="#FF2BC4A0"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/card_close"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginLeft="8dp"
+            android:layout_weight="1"
+            android:background="#22FFFFFF"
+            android:text="收起"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC"
+            android:textSize="13sp" />
+    </LinearLayout>
+</LinearLayout>

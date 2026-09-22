@@ -1,0 +1,18 @@
+# build outputs
+build/
+*.apk
+*.idsig
+tools/out/
+
+# third-party binaries: not vendored, run fetch_deps.ps1
+app/assets/models/
+app/jniLibs/
+libs/
+
+# signing material: never publish
+*.keystore
+*.jks
+
+# tokenizer cross-check artifacts
+tools/probe_java.txt
+tools/probe_py.txt

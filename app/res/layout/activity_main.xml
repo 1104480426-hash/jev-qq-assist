@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#FF12141A"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="20dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Jev 聊天参谋"
+            android:textColor="#FF2BC4A0"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:lineSpacingExtra="3dp"
+            android:text="Jev 不生成回复文本，只给类型化判定：是否在等你回、对方意图、情绪强度、说错话风险、该用哪种策略。决定权在你手里。"
+            android:textColor="#FF9AA3AC"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/status"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#FF1B1F24"
+            android:lineSpacingExtra="4dp"
+            android:padding="12dp"
+            android:text=""
+            android:textColor="#FFE6E9EC"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:text="判定端点"
+            android:textColor="#FFE6E9EC"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/endpoint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FF1B1F24"
+            android:hint="http://192.168.31.217:8890/v1/systemone"
+            android:inputType="textUri"
+            android:padding="10dp"
+            android:textColor="#FFE6E9EC"
+            android:textColorHint="#FF5A626A"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="模型名"
+            android:textColor="#FFE6E9EC"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/model"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FF1B1F24"
+            android:hint="jev-latest"
+            android:inputType="text"
+            android:padding="10dp"
+            android:textColor="#FFE6E9EC"
+            android:textColorHint="#FF5A626A"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="API Key（本地服务留空即可）"
+            android:textColor="#FFE6E9EC"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/apikey"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FF1B1F24"
+            android:hint="可留空"
+            android:inputType="text"
+            android:padding="10dp"
+            android:textColor="#FFE6E9EC"
+            android:textColorHint="#FF5A626A"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="上下文行数"
+            android:textColor="#FFE6E9EC"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/lines"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#FF1B1F24"
+            android:hint="12"
+            android:inputType="number"
+            android:padding="10dp"
+            android:textColor="#FFE6E9EC"
+            android:textColorHint="#FF5A626A"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/save"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="16dp"
+            android:background="#FF2BC4A0"
+            android:text="保存"
+            android:textAllCaps="false"
+            android:textColor="#FF0B1412"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/test"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#FF232830"
+            android:text="测试判定"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC" />
+
+        <Button
+            android:id="@+id/mode"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#FF232830"
+            android:text="切换判定模式（本地）"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC" />
+
+        <Button
+            android:id="@+id/localcheck"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#FF232830"
+            android:text="加载本地模型并自检"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC" />
+
+        <Button
+            android:id="@+id/accessibility"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#FF232830"
+            android:text="开启读屏无障碍"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC" />
+
+        <Button
+            android:id="@+id/toggle"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="#FF232830"
+            android:text="启动悬浮球"
+            android:textAllCaps="false"
+            android:textColor="#FFE6E9EC" />
+
+        <TextView
+            android:id="@+id/output"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#FF1B1F24"
+            android:lineSpacingExtra="4dp"
+            android:padding="12dp"
+            android:text=""
+            android:textColor="#FF9AA3AC"
+            android:textSize="11sp" />
+    </LinearLayout>
+</ScrollView>
