@@ -75,6 +75,13 @@ public class MainActivity extends Activity {
             }
         });
 
+        findViewById(R.id.snapshot).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showSnapshot();
+            }
+        });
+
         modeButton = (Button) findViewById(R.id.mode);
         modeButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -164,6 +171,8 @@ public class MainActivity extends Activity {
         StringBuilder sb = new StringBuilder();
         sb.append("悬浮窗权限：").append(overlay ? "已授予" : "未授予");
         sb.append('\n').append("读屏无障碍：").append(a11y ? "已开启" : "未开启");
+        sb.append('\n').append("按需抓取：")
+                .append(ChatAccessibilityService.isConnected() ? "可用" : "不可用（服务未连上）");
         sb.append('\n').append("悬浮球：").append(OverlayService.running ? "运行中" : "未运行");
         if (Prefs.isRemoteDegraded(this)) {
             sb.append('\n').append("判定模式：远端未填 key，已暂用本地模型")
@@ -205,6 +214,28 @@ public class MainActivity extends Activity {
         toggleButton.setText(OverlayService.running ? "停止悬浮球" : "启动悬浮球");
         modeButton.setText("切换判定模式（当前："
                 + (Prefs.isLocal(this) ? "本地" : "远端") + "）");
+    }
+
+    /**
+     * 现场抓一次当前窗口并原样打印。
+     *
+     * <p>状态区里那份是缓存，可能停在别的窗口上（实测出现过停在桌面），看它容易误判。
+     * 这个按钮走的是和点悬浮球完全相同的那条路径，显示什么，判定就基于什么。
+     */
+    private void showSnapshot() {
+        String live = ChatAccessibilityService.captureNow();
+        if (live == null) {
+            outputView.setText("读屏服务未连上，先在系统设置里开启无障碍，再回来点这个按钮。");
+            return;
+        }
+        if (live.length() == 0) {
+            outputView.setText("当前窗口没有读到任何文字。\n\n"
+                    + "如果是微信，这是正常的——它的界面全自绘，不向无障碍暴露内容。");
+            return;
+        }
+        String preview = live.length() > 900 ? live.substring(0, 900) + "\n…（还有 "
+                + (live.length() - 900) + " 字）" : live;
+        outputView.setText("—— 当前窗口实际读到 " + live.length() + " 字 ——\n\n" + preview);
     }
 
     /** 加载本地模型并跑一次自检，全程在后台线程。 */

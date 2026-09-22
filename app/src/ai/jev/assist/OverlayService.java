@@ -359,13 +359,18 @@ public class OverlayService extends Service {
 
         dismissed = false;
 
-        String transcript = ChatAccessibilityService.cachedTranscript();
-        if (transcript.length() == 0) {
-            headlineText = "还没抓到聊天内容";
-            bodyText = "先在设置里开启「Jev 聊天参谋」无障碍服务，然后切到聊天窗口停一下，再点我。";
+        // 现抓当前窗口，不吃缓存——缓存可能还停在桌面或上一个 App 上
+        String transcript = ChatAccessibilityService.captureNow();
+        if (transcript == null) {
+            transcript = ChatAccessibilityService.cachedTranscript();
+        }
+        if (transcript == null || transcript.length() == 0) {
+            headlineText = "这个窗口读不到文字";
+            bodyText = "当前界面对无障碍没有暴露文字，或者读屏服务没在运行。"
+                    + "换到聊天窗口再点一次；微信整屏都是自绘的，读不到是正常的。";
             metaText = "";
-            pillText = "还没抓到聊天内容";
-            riskHigh = false;
+            pillText = "读不到文字";
+            riskHigh = true;
             retryable = false;
             showCard();
             return;

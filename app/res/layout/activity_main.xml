@@ -152,6 +152,16 @@
             android:textColor="#FFFFFFFF" />
 
         <Button
+            android:id="@+id/snapshot"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/bg_btn_ghost"
+            android:text="抓一次看看（当前窗口）"
+            android:textAllCaps="false"
+            android:textColor="#FF0E8C74" />
+
+        <Button
             android:id="@+id/mode"
             android:layout_width="match_parent"
             android:layout_height="46dp"

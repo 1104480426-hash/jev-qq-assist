@@ -35,8 +35,57 @@ public class ChatAccessibilityService extends AccessibilityService {
      */
     private static volatile List<int[]> cachedBands = new ArrayList<>();
 
+    /** 已连接的服务实例，用于按需立刻抓取。 */
+    private static volatile ChatAccessibilityService instance;
+
     private static final long THROTTLE_MS = 250L;
     private static final int MAX_NODES = 4000;
+
+    @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        instance = this;
+    }
+
+    /** 读屏服务是否已连上。按需抓取依赖它，连不上就只能退回缓存。 */
+    public static boolean isConnected() {
+        return instance != null;
+    }
+
+    /**
+     * 立刻抓一次当前活动窗口并返回转录。
+     *
+     * <p>缓存是靠事件被动更新的，而事件可能来自别的窗口——实测出现过缓存里还是桌面
+     * （负一屏的步数、应用图标名）的情况，用户以为在分析聊天，其实在分析桌面。
+     * 所以点悬浮球的时候必须现抓，不能吃缓存。
+     *
+     * <p>返回 null 表示读屏服务没连上。
+     */
+    public static String captureNow() {
+        ChatAccessibilityService s = instance;
+        if (s == null) {
+            return null;
+        }
+        return s.captureActiveWindow();
+    }
+
+    private String captureActiveWindow() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) {
+            return "";
+        }
+        try {
+            List<Line> lines = new ArrayList<>();
+            collect(root, lines, 0);
+            if (lines.isEmpty()) {
+                return "";
+            }
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            return buildTranscript(lines, dm.widthPixels);
+        } finally {
+            recycleSafely(root);
+        }
+    }
 
     /** 界面上常见的非消息文本，命中即丢。 */
     private static final Set<String> NOISE = new LinkedHashSet<>();
@@ -125,7 +174,8 @@ public class ChatAccessibilityService extends AccessibilityService {
             if (lines.isEmpty()) {
                 return;
             }
-            String transcript = buildTranscript(lines);
+            DisplayMetrics dm = getResources().getDisplayMetrics();
+            String transcript = buildTranscript(lines, dm.widthPixels);
             if (transcript.length() == 0) {
                 return;
             }
@@ -259,29 +309,36 @@ public class ChatAccessibilityService extends AccessibilityService {
             }
         }
 
-        Set<Line> usedAsLabel = Collections.newSetFromMap(new java.util.IdentityHashMap<Line, Boolean>());
-        List<Message> out = new ArrayList<>(kept.size());
+        // 两遍。第一遍只登记"哪一行是谁的昵称"，第二遍才输出。
+        // 必须这样分：昵称行排在它标注的消息之前，一遍处理时轮到昵称自己，
+        // 它还没被登记为标签，就会被当成一条普通消息输出（实测就是这样，
+        // 转录里出现了「对方：张三」这种把昵称当消息的行）。
+        Set<Line> labels = Collections.newSetFromMap(new java.util.IdentityHashMap<Line, Boolean>());
+        java.util.Map<Line, String> speakerOf = new java.util.IdentityHashMap<Line, String>();
 
         for (int i = 0; i < kept.size(); i++) {
             Line cur = kept.get(i);
-            String speaker = "";
-            // 只看上面三条，再远就不可能是这条消息的昵称了
+            // 只看上面三条，再远就不可能是这条消息的昵称
             for (int j = i - 1; j >= 0 && j >= i - 3; j--) {
                 Line above = kept.get(j);
                 if (looksLikeSpeakerLabel(above, cur)) {
-                    speaker = above.text;
-                    usedAsLabel.add(above);
+                    labels.add(above);
+                    speakerOf.put(cur, above.text);
                     break;
                 }
                 if (above.bottom < cur.top - 30) {
                     break;
                 }
             }
-            if (speaker.length() > 0) {
-                out.add(new Message(speaker, cur.text, cur.top));
-            } else if (!usedAsLabel.contains(cur)) {
-                out.add(new Message("", cur.text, cur.top));
+        }
+
+        List<Message> out = new ArrayList<>(kept.size());
+        for (Line cur : kept) {
+            if (labels.contains(cur)) {
+                continue;      // 它是昵称，不单独成一条
             }
+            String sp = speakerOf.get(cur);
+            out.add(new Message(sp == null ? "" : sp, cur.text, cur.top));
         }
         return out;
     }
@@ -317,7 +374,7 @@ public class ChatAccessibilityService extends AccessibilityService {
         return a.text.length() <= Math.max(4, b.text.length() / 2);
     }
 
-    private String buildTranscript(List<Line> lines) {
+    private String buildTranscript(List<Line> lines, int width) {
         Collections.sort(lines, new Comparator<Line>() {
             @Override
             public int compare(Line a, Line b) {
@@ -329,7 +386,6 @@ public class ChatAccessibilityService extends AccessibilityService {
         });
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
-        int width = dm.widthPixels;
 
         List<Message> messages = groupMessages(lines, width);
 
