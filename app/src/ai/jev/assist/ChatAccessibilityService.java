@@ -1,9 +1,12 @@
 package ai.jev.assist;
 
 import android.accessibilityservice.AccessibilityService;
+import android.content.Context;
 import android.graphics.Rect;
+import android.os.Build;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.view.WindowManager;
 import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
@@ -98,6 +101,9 @@ public class ChatAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
+    /** 最近一次抓取所属的包名，由 captureActiveWindow 在拿 root 时顺手记下。 */
+    private String pendingPkg = "";
+
     /**
      * 立刻抓一次当前活动窗口并返回转录。
      *
@@ -116,15 +122,12 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (fresh != null && fresh.length() > 0) {
             // 写回缓存。这样用户切回设置页时，看到的就是刚才那次判定实际用的文本，
             // 而不是上一次被动事件留下的、可能来自别的窗口的旧内容。
-            String pkg = "";
-            AccessibilityNodeInfo root = s.getRootInActiveWindow();
-            if (root != null) {
-                CharSequence p = root.getPackageName();
-                pkg = p == null ? "" : p.toString();
-                recycleSafely(root);
-            }
+            //
+            // 包名必须用抓取时那一次 root 的。早先在这里重新取了一次
+            // getRootInActiveWindow()，结果卡片一弹出来活动窗口就变成通知栏，
+            // 界面上如实写着「最近读自 com.android.systemui」。
             cachedTranscript = fresh;
-            lastCapturePkg = pkg;
+            lastCapturePkg = s.pendingPkg;
             lastCaptureAt = System.currentTimeMillis();
         }
         return fresh;
@@ -145,8 +148,16 @@ public class ChatAccessibilityService extends AccessibilityService {
                     trace("! 一行都没收下");
                     return "";
                 }
+                CharSequence p = root.getPackageName();
+                pendingPkg = p == null ? "" : p.toString();
+                trace("包名 " + pendingPkg);
                 DisplayMetrics dm = getResources().getDisplayMetrics();
-                return buildTranscript(lines, dm.widthPixels);
+                int screenH = realScreenHeight();
+                trace("尺寸 " + dm.widthPixels + "x" + dm.heightPixels
+                        + " 真实高=" + screenH + " density=" + dm.density);
+                String out = buildTranscript(lines, dm.widthPixels, screenH);
+                trace("统计 " + lastStats);
+                return out;
             } finally {
                 recycleSafely(root);
             }
@@ -249,7 +260,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 return;
             }
             DisplayMetrics dm = getResources().getDisplayMetrics();
-            String transcript = buildTranscript(lines, dm.widthPixels);
+            String transcript = buildTranscript(lines, dm.widthPixels, realScreenHeight());
             if (transcript.length() == 0) {
                 return;
             }
@@ -407,15 +418,8 @@ public class ChatAccessibilityService extends AccessibilityService {
      * 再对每条消息往上就近找一个昵称。
      */
     private List<Message> groupMessages(List<Line> lines, int width) {
-        int avatarBand = (int) (width * 0.13);
-
-        List<Line> kept = new ArrayList<>(lines.size());
-        for (Line l : lines) {
-            boolean avatarGlyph = l.left < avatarBand && l.text.length() <= 2;
-            if (!avatarGlyph) {
-                kept.add(l);
-            }
-        }
+        // 头像、标题栏、同一行的多段文字都已经在 sanitize 里理过了
+        List<Line> kept = lines;
 
         // 两遍。第一遍只登记"哪一行是谁的昵称"，第二遍才输出。
         // 必须这样分：昵称行排在它标注的消息之前，一遍处理时轮到昵称自己，
@@ -446,7 +450,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 named++;
             }
         }
-        lastStats = "原始 " + lines.size() + " 行 · 过滤后 " + kept.size()
+        lastStats = "清理后 " + kept.size()
                 + " 行 · 成条 " + (kept.size() - labels.size())
                 + " · 认出署名 " + named;
 
@@ -481,8 +485,11 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (a.height() >= b.height() * 0.85) {
             return false;              // 昵称一定比正文矮，但别要求矮太多
         }
-        if (a.text.length() > 12) {
-            return false;              // 昵称不会很长
+        // 昵称长度上限放到 24。群名片本身就长，再加上群头衔（「管理员」「群主」）
+        // 会跟名字合并成同一行，12 字根本不够——实测「管理员 坤山靠（唯一…」是 13 字，
+        // 就卡在这条上，整个群的署名只认出一个。真正拦住正文的是上面那条高度判据。
+        if (a.text.length() > 24) {
+            return false;
         }
         // 昵称一般不含句末标点，正文常有
         if (a.text.matches(".*[。！？!?]$")) {
@@ -496,7 +503,166 @@ public class ChatAccessibilityService extends AccessibilityService {
         return clearlyShorter || a.text.length() <= Math.max(4, b.text.length() / 2);
     }
 
-    private String buildTranscript(List<Line> lines, int width) {
+    /**
+     * 把读到的扁平文字行理成真正的消息行。
+     *
+     * <p>无障碍树里一条消息会被拆成好几段，还夹着两类不请自来的客人。实测 QQ 群聊里
+     * 三者齐全，缺哪一步转录就全是噪音：头像那格的 content-desc 是「张博文的资料卡」，
+     * 七个字，按"短到只有一两个字"去认根本认不出来；「管理员」和「bello」是同一行的两个
+     * TextView，不合并前者就自己成一条消息；标题栏（返回、群名、成员数、听筒模式、
+     * 聊天设置）本来就在文字行里，混进来会顶掉真正的上下文。
+     */
+    private List<Line> sanitize(List<Line> lines, int width, int height) {
+        List<Line> out = mergeSameRow(dropAvatars(lines, width));
+        List<Line> body = dropHeader(out, height);
+        // 万一窗口里的文字全在顶部（没停在聊天窗口就会这样），标题栏规则会清空一切。
+        // 宁可留着标题栏，也别交出一份空白转录。
+        return body.isEmpty() ? out : body;
+    }
+
+    /**
+     * 剔掉头像。
+     *
+     * <p>头像贴在屏幕两端：别人的在左，自己的在右。实测它有两种形态——图片本身带出来的
+     * 单字，以及整格的 content-desc（QQ 给的是「张博文的资料卡」「我的资料卡」）。后者
+     * 长度不定，所以不能只靠长度认。真正的判据是位置：头像在两端，对话内容在中间，
+     * 所以同一水平线上若有更靠中间的文字，贴在边上那块就是头像。右侧这一支是必需的，
+     * 漏掉它自己的头像就会和对面昵称合并，署名直接变成「管理员 bello 我的资料卡」。
+     */
+    private List<Line> dropAvatars(List<Line> lines, int width) {
+        int edgeBand = (int) (width * 0.05);
+        int leftBand = (int) (width * 0.13);
+        int rightBand = (int) (width * 0.87);
+        List<Line> out = new ArrayList<>(lines.size());
+        for (int i = 0; i < lines.size(); i++) {
+            Line l = lines.get(i);
+            // 死死贴在最左边的，是容器或头像的 desc，不是对话文字——真实文本总有内边距。
+            // 实测 QQ 会话列表底部就漏进来一条 left=0 的头像 desc，它右边那行的名字没被
+            // 读到，所以"与中间文字并存"这条判据对它不成立，只能靠位置硬挡。
+            if (l.left < edgeBand) {
+                continue;
+            }
+            boolean atLeft = l.left < leftBand;
+            boolean atRight = l.left >= rightBand;
+            if (!atLeft && !atRight) {
+                out.add(l);
+                continue;
+            }
+            if (l.text.length() <= 2) {
+                continue;              // 头像角标
+            }
+            boolean paired = false;
+            for (int j = 0; j < lines.size(); j++) {
+                if (j == i) {
+                    continue;
+                }
+                Line other = lines.get(j);
+                if (!overlapsVertically(l, other)) {
+                    continue;
+                }
+                // 左边那块要右边有字才算头像，右边那块要左边有字
+                if (atLeft ? other.left > l.left : other.left < l.left) {
+                    paired = true;
+                    break;
+                }
+            }
+            // 判不准就留着。多一行噪音，总好过把真消息吃掉。
+            if (!paired) {
+                out.add(l);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 两行的纵向范围是否有交集。
+     *
+     * <p>判断"是不是同一水平行上的东西"用这个而不是比 top 相等：各 App 的头像格子
+     * 和它右边的昵称并不总是严格顶对齐。抖音那句头像 desc 的 top 是 1080，昵称是 1107，
+     * 差 27，按"顶边相差 4 以内"去认就漏了；但它们纵向明显交叠。
+     */
+    private static boolean overlapsVertically(Line a, Line b) {
+        return Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+    }
+
+    /**
+     * 把同一水平行上的多段文字接成一行。
+     *
+     * <p>QQ 把「管理员」和「bello」渲染成同一行的两个 TextView，顶边都是 1394。
+     * 不合并的话「管理员」自己会变成一条消息，而真正的对话内容拿到的是「bello」这个署名。
+     */
+    private List<Line> mergeSameRow(List<Line> lines) {
+        List<Line> out = new ArrayList<>(lines.size());
+        int i = 0;
+        while (i < lines.size()) {
+            Line first = lines.get(i);
+            StringBuilder text = new StringBuilder(first.text);
+            int top = first.top;
+            int bottom = first.bottom;
+            int centerX = first.centerX;
+            int j = i + 1;
+            while (j < lines.size()) {
+                Line next = lines.get(j);
+                // 与已经攒起来的这段范围比对，而不是只跟第一段比——三段的行也接得上
+                if (Math.min(bottom, next.bottom) - Math.max(top, next.top) <= 0) {
+                    break;
+                }
+                text.append(' ').append(next.text);
+                top = Math.min(top, next.top);
+                bottom = Math.max(bottom, next.bottom);
+                centerX = next.centerX;   // 最右边那段通常是正文
+                j++;
+            }
+            out.add(new Line(text.toString(), top, bottom, first.left, centerX));
+            i = j;
+        }
+        return out;
+    }
+
+    /**
+     * 剔掉标题栏。
+     *
+     * <p>聊天内容从标题栏下面开始，所以只按纵向位置判断，不去猜文字内容——猜内容就得给
+     * 每个 App 建一张词表，换个 App 就废了。整行都落在顶部 11% 以内才算标题栏。
+     *
+     * <p>11% 是量出来的：QQ 群聊标题栏底边在 226，而单聊顶上还有一行「在线 某某」，
+     * 底边 246，卡在 10%（240）外面漏了进来。放宽到 11%（264）能盖住它，同时第一条
+     * 真消息（见过最贴边的一条底边 272）仍在带外。判据用底边而不是顶边，就是为了只切
+     * 整行都在带内的，别把滚到最上面、只露了半截的消息削掉。
+     */
+    private List<Line> dropHeader(List<Line> lines, int height) {
+        int band = (int) (height * 0.11);
+        List<Line> out = new ArrayList<>(lines.size());
+        for (Line l : lines) {
+            if (l.bottom > band) {
+                out.add(l);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * 屏幕的真实高度。
+     *
+     * <p>不能用 getResources().getDisplayMetrics()：读屏服务拿到的这份尺寸扣掉了状态栏
+     * （实测 1080x2232，而屏幕是 1080x2400），可节点的坐标是含状态栏的绝对坐标。
+     * 两套坐标系混用，按比例算出来的标题栏下沿会偏 168 像素——差 0.5 像素就会漏掉
+     * 单聊顶上那行「在线 某某」。
+     */
+    private int realScreenHeight() {
+        WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
+        if (wm == null) {
+            return getResources().getDisplayMetrics().heightPixels;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            return wm.getCurrentWindowMetrics().getBounds().height();
+        }
+        DisplayMetrics real = new DisplayMetrics();
+        wm.getDefaultDisplay().getRealMetrics(real);
+        return real.heightPixels;
+    }
+
+    private String buildTranscript(List<Line> lines, int width, int height) {
         Collections.sort(lines, new Comparator<Line>() {
             @Override
             public int compare(Line a, Line b) {
@@ -509,7 +675,14 @@ public class ChatAccessibilityService extends AccessibilityService {
 
         DisplayMetrics dm = getResources().getDisplayMetrics();
 
+        int raw = lines.size();
+        lines = sanitize(lines, width, height);
+        for (Line l : lines) {
+            trace("A [" + l.top + "," + l.bottom + "," + l.left + "] " + head(l.text));
+        }
+
         List<Message> messages = groupMessages(lines, width);
+        lastStats = "原始 " + raw + " 行 → " + lastStats;
 
         // 认出两个以上不同昵称才算群聊；否则按一对一的左右分栏处理
         Set<String> speakers = new LinkedHashSet<>();
