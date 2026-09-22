@@ -349,21 +349,22 @@ public final class DecisionSpec {
         }
         sb.append(tail).append('。').append('\n');
 
-        // 第二句：怎么做
+        // 第二句：怎么做。措辞要和标题岔开——标题已经把结论说了，
+        // 这里再复述一遍"简短回一句"就只剩啰嗦。
         if ("warm_comfort".equals(strategy)) {
-            sb.append("先说一句安抚的话，把对方的感受接住，别急着解释。");
+            sb.append("先说一句安抚的话，让对方的感受有落点。");
         } else if ("explain_facts".equals(strategy)) {
-            sb.append("把来龙去脉说清楚就行，不用绕。");
+            sb.append("把原因或实情讲明白，不用绕。");
         } else if ("playful".equals(strategy)) {
-            sb.append("用轻松的方式回，把气氛带回日常。");
+            sb.append("轻松带过去，别接那股劲。");
         } else if ("direct_answer".equals(strategy)) {
-            sb.append("直接回答对方问的那件事，别扯别的。");
+            sb.append("对方问什么就答什么，别扯别的。");
         } else if ("defer".equals(strategy)) {
-            sb.append("先回一句收到了，说稍后认真回，别让对方干等。");
+            sb.append("说一句收到了，并给出你什么时候会认真回。");
         } else if ("hold_distance".equals(strategy)) {
-            sb.append("简短回一句，不展开这个话题。");
+            sb.append("不用展开，也不用解释。");
         } else {
-            sb.append("正常回一句就可以。");
+            sb.append("照平常的方式回就可以。");
         }
         return sb.toString();
     }

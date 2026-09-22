@@ -27,6 +27,14 @@ public class ChatAccessibilityService extends AccessibilityService {
 
     private static volatile String cachedTranscript = "";
 
+    /**
+     * 最近一次抓到的文本行的纵向区间，每项是 [top, bottom]。
+     *
+     * <p>悬浮卡片用它来避开聊天内容：把屏幕切成若干段，标出哪些段有字，卡片落到
+     * 最靠上的那段空白里。这样球停在哪都不至于压住消息。
+     */
+    private static volatile List<int[]> cachedBands = new ArrayList<>();
+
     private static final long THROTTLE_MS = 250L;
     private static final int MAX_NODES = 4000;
 
@@ -47,6 +55,11 @@ public class ChatAccessibilityService extends AccessibilityService {
     /** 取最近一次的对话转录，无内容时返回空串。 */
     public static String cachedTranscript() {
         return cachedTranscript;
+    }
+
+    /** 取最近一次各文本行的纵向区间，供悬浮卡片避让。 */
+    public static List<int[]> recentTextBands() {
+        return cachedBands;
     }
 
     @Override
@@ -83,6 +96,13 @@ public class ChatAccessibilityService extends AccessibilityService {
             cachedTranscript = transcript;
             lastCapturePkg = pkg;
             lastCaptureAt = now;
+
+            // 顺手记下每行占的纵向范围，卡片靠它避让
+            List<int[]> bands = new ArrayList<>(lines.size());
+            for (Line line : lines) {
+                bands.add(new int[]{line.top, line.bottom});
+            }
+            cachedBands = bands;
         } finally {
             recycleSafely(root);
         }
@@ -97,11 +117,13 @@ public class ChatAccessibilityService extends AccessibilityService {
     private static final class Line {
         final String text;
         final int top;
+        final int bottom;
         final int centerX;
 
-        Line(String text, int top, int centerX) {
+        Line(String text, int top, int bottom, int centerX) {
             this.text = text;
             this.top = top;
+            this.bottom = bottom;
             this.centerX = centerX;
         }
     }
@@ -120,7 +142,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 Rect r = new Rect();
                 node.getBoundsInScreen(r);
                 if (!r.isEmpty()) {
-                    out.add(new Line(value, r.top, r.centerX()));
+                    out.add(new Line(value, r.top, r.bottom, r.centerX()));
                 }
             }
         }

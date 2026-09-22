@@ -646,14 +646,59 @@ public class OverlayService extends Service {
             cardParams.x = ballParams.x + (int) (Prefs.cardOffsetX(this) * screenW);
             cardParams.y = ballParams.y + (int) (Prefs.cardOffsetY(this) * screenH);
         } else {
+            // 横向仍贴着球那一侧，纵向交给避让：能放进空白就别压着消息
             boolean ballOnLeft = ballParams.x + ballSizePx / 2 < screenW / 2;
             cardParams.x = ballOnLeft
                     ? ballParams.x + ballSizePx + gap
                     : ballParams.x - cardW - gap;
-            cardParams.y = ballParams.y + (ballSizePx - cardH) / 2;
+
+            int clearTop = findClearBand(cardH);
+            cardParams.y = clearTop >= 0 ? clearTop : ballParams.y + (ballSizePx - cardH) / 2;
         }
         clampCardInside(cardW);
         moveView(cardView, cardParams);
+    }
+
+    /**
+     * 在屏幕上找一段能放下整个卡片的空白，返回它的顶部 y；找不到返回 -1。
+     *
+     * <p>做法是把屏幕按 60dp 切成段，用读屏服务记下的文本行区间把这些段标成"有字"，
+     * 然后从上往下找第一段连续空白。之所以从上往下，是因为聊天窗口最新的消息在底部，
+     * 挡住那里最难受——上面都是翻过去的旧消息。
+     */
+    private int findClearBand(int cardH) {
+        java.util.List<int[]> bands = ChatAccessibilityService.recentTextBands();
+        if (bands == null || bands.isEmpty() || screenH <= 0) {
+            return -1;
+        }
+
+        int seg = Math.max(1, (int) (60 * density));
+        int segs = screenH / seg + 1;
+        boolean[] occupied = new boolean[segs];
+        for (int[] b : bands) {
+            if (b == null || b.length < 2) {
+                continue;
+            }
+            int from = Math.max(0, b[0] / seg);
+            int to = Math.min(segs - 1, b[1] / seg);
+            for (int i = from; i <= to; i++) {
+                occupied[i] = true;
+            }
+        }
+
+        int need = cardH / seg + 1;
+        int run = 0;
+        for (int i = 0; i < segs; i++) {
+            if (occupied[i]) {
+                run = 0;
+                continue;
+            }
+            run++;
+            if (run >= need) {
+                return (i - run + 1) * seg;
+            }
+        }
+        return -1;
     }
 
     private void clampCardInside(int cardWidth) {
