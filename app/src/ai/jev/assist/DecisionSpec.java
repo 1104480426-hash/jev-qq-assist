@@ -283,6 +283,39 @@ public final class DecisionSpec {
 
     /** 结论：一句话，直接告诉用户该怎么做。胶囊和卡片标题都用它。 */
     static String plainHeadline(JSONObject answers) {
+        return headlineBasis(answers)[0];
+    }
+
+    /**
+     * 标题这一句有多确定，取自标题实际依据的那一项。
+     *
+     * <p>不能随手挑一个判定项来报：标题有时是从意图推的（「先听完，别讲道理」），有时是
+     * 从策略推的（「直接回答就行」），报错项就等于拿另一个数冒充这个结论的把握。取不到
+     * 就返回 -1，调用方不显示。
+     */
+    static double headlineConfidence(JSONObject answers) {
+        String key = headlineBasis(answers)[1];
+        if (key.length() == 0) {
+            return -1;
+        }
+        JSONObject o = answers.optJSONObject(key);
+        if (o == null) {
+            return -1;
+        }
+        // choice 项报 confidence，noul 项报概率
+        if (o.has("noul")) {
+            return o.optDouble("noul", -1);
+        }
+        return o.optDouble("confidence", -1);
+    }
+
+    /**
+     * 标题和它依据的键，返回 {标题, 键}。
+     *
+     * <p>键为空串表示这条结论没有单一的置信度可报：tension 是 score 类型，本来就没有
+     * 「把握」这回事，所以「语气放软一点」那几条不给数字，硬凑一个反而误导。
+     */
+    private static String[] headlineBasis(JSONObject answers) {
         double tension = score(answers, "tension");
         double risk = noul(answers, "risk");
         double awaiting = noul(answers, "awaiting_reply");
@@ -290,47 +323,49 @@ public final class DecisionSpec {
         String strategy = choice(answers, "strategy");
 
         if (tension >= 2 && risk >= 0.6) {
-            return "先别急着回";
+            return new String[]{"先别急着回", "risk"};
         }
         if ("complaint".equals(intent) && tension >= 1.5) {
-            return "别解释，先认下来";
+            return new String[]{"别解释，先认下来", "intent"};
         }
         if ("venting".equals(intent)) {
-            return "先听完，别讲道理";
+            return new String[]{"先听完，别讲道理", "intent"};
         }
         if ("invitation".equals(intent)) {
-            return "给个准话，别拖着";
+            return new String[]{"给个准话，别拖着", "intent"};
         }
         // 策略放在风险前面：风险只说明"这句容易踩雷"，策略才说得出该怎么回。
         // 反过来会让标题说"小心点"、正文却说"简短回一句"，两句话打架。
         if ("warm_comfort".equals(strategy)) {
-            return tension >= 1.5 ? "先别急着回" : "先把情绪接住";
+            return tension >= 1.5
+                    ? new String[]{"先别急着回", "strategy"}
+                    : new String[]{"先把情绪接住", "strategy"};
         }
         if ("defer".equals(strategy)) {
-            return "先应一声，稍后细说";
+            return new String[]{"先应一声，稍后细说", "strategy"};
         }
         if ("hold_distance".equals(strategy)) {
-            return "简短回一句就好";
+            return new String[]{"简短回一句就好", "strategy"};
         }
         if ("playful".equals(strategy)) {
-            return "可以开个玩笑";
+            return new String[]{"可以开个玩笑", "strategy"};
         }
         if ("direct_answer".equals(strategy)) {
-            return "直接回答就行";
+            return new String[]{"直接回答就行", "strategy"};
         }
         if ("explain_facts".equals(strategy)) {
-            return "把话说清楚就行";
+            return new String[]{"把话说清楚就行", "strategy"};
         }
         if (tension >= 2) {
-            return "语气放软一点";
+            return new String[]{"语气放软一点", ""};
         }
         if (awaiting < 0.5 && tension < 0.5) {
-            return "这条可以不用回";
+            return new String[]{"这条可以不用回", "awaiting_reply"};
         }
         if (risk >= 0.6) {
-            return "想清楚再发";
+            return new String[]{"想清楚再发", "risk"};
         }
-        return "正常回就行";
+        return new String[]{"正常回就行", ""};
     }
 
     /** 解释：第一句说对方现在什么状态，第二句说具体怎么回。 */

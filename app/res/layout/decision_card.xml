@@ -31,6 +31,15 @@
             android:textStyle="bold" />
 
         <TextView
+            android:id="@+id/card_confidence"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginLeft="6dp"
+            android:text=""
+            android:textColor="#FF8E8E93"
+            android:textSize="11sp" />
+
+        <TextView
             android:id="@+id/card_drag"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"

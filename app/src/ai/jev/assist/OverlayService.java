@@ -74,6 +74,8 @@ public class OverlayService extends Service {
     private String headlineText = "";
     private String bodyText = "";
     private String metaText = "";
+    /** 标题那一句的把握度，形如「把握 72%」。取不到就是空串，卡片上不显示。 */
+    private String confidenceText = "";
     private String pillText = "";
     private boolean riskHigh = false;
     private boolean retryable = false;
@@ -575,6 +577,7 @@ public class OverlayService extends Service {
                                     bodyText = err;
                                     metaText = "端点 " + endpoint;
                                     pillText = "判定失败";
+                                    confidenceText = "";
                                     riskHigh = true;
                                     retryable = false;
                                     showCard();
@@ -592,6 +595,11 @@ public class OverlayService extends Service {
                                 return;
                             }
                             headlineText = DecisionSpec.plainHeadline(answers);
+                            // 把握度取的是标题实际依据的那一项，取不到就留空不显示
+                            double conf = DecisionSpec.headlineConfidence(answers);
+                            confidenceText = conf >= 0
+                                    ? "把握 " + Math.round(conf * 100) + "%"
+                                    : "";
                             bodyText = DecisionSpec.plainAdvice(answers);
                             // 原始判定不再占正文，压成一行小字放在下面当依据。
                             // 依据行下面再补一行输入摘要：结论看不出读没读对，用户需要一个
@@ -628,6 +636,7 @@ public class OverlayService extends Service {
                             }
                             headlineText = "本地判定失败";
                             bodyText = String.valueOf(e.getMessage());
+                            confidenceText = "";
                             metaText = "本地模型未能加载，可在设置里看具体原因。";
                             pillText = "本地判定失败";
                             riskHigh = true;
@@ -767,6 +776,7 @@ public class OverlayService extends Service {
 
         cardView = LayoutInflater.from(this).inflate(R.layout.decision_card, null);
         ((TextView) cardView.findViewById(R.id.card_headline)).setText(headlineText);
+        ((TextView) cardView.findViewById(R.id.card_confidence)).setText(confidenceText);
         ((TextView) cardView.findViewById(R.id.card_body)).setText(bodyText);
         ((TextView) cardView.findViewById(R.id.card_meta)).setText(metaText);
 
