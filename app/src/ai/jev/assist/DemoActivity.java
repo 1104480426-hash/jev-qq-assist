@@ -14,12 +14,21 @@ import android.webkit.WebView;
  */
 public class DemoActivity extends Activity {
 
-    private static final String PAGE = "file:///android_asset/demo-chat.html";
+    /** 一对一的虚构对话，没有昵称行，靠气泡左右位置区分说话人。 */
+    private static final String PAGE_PRIVATE = "file:///android_asset/demo-chat.html";
+    /** 群聊的虚构对话，每条消息上方带昵称。 */
+    private static final String PAGE_GROUP = "file:///android_asset/demo-chat-group.html";
+
+    /** 置为 true 时打开群聊示例。 */
+    public static final String EXTRA_GROUP = "ai.jev.assist.extra.GROUP";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_demo);
+
+        boolean group = getIntent().getBooleanExtra(EXTRA_GROUP, false);
+        setTitle(group ? "演示模式 · 群聊" : "演示模式 · 私聊");
 
         WebView web = (WebView) findViewById(R.id.demo_web);
         WebSettings settings = web.getSettings();
@@ -30,7 +39,7 @@ public class DemoActivity extends Activity {
         // 无障碍节点树交给读屏服务，演示时悬浮球读到的就是这一页
         web.setImportantForAccessibility(WebView.IMPORTANT_FOR_ACCESSIBILITY_YES);
 
-        web.loadUrl(PAGE);
+        web.loadUrl(group ? PAGE_GROUP : PAGE_PRIVATE);
     }
 
     @Override

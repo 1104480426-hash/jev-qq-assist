@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f2f2f7">
+<title>群聊示例（虚构内容，仅用于截图与测试）</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #f2f2f7;
+    font-family: "PingFang SC", "Noto Sans CJK SC", "Microsoft YaHei", sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  header {
+    position: sticky; top: 0;
+    background: rgba(242, 242, 247, .96);
+    border-bottom: 1px solid #e3e3e8;
+    padding: 12px 16px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  header .title { font-weight: 600; font-size: 17px; color: #111; }
+  header .sub { font-size: 12px; color: #8a8a8e; margin-top: 1px; }
+
+  .thread { padding: 14px 14px 48px; display: flex; flex-direction: column; gap: 4px; }
+
+  .day { text-align: center; font-size: 12px; color: #8a8a8e; margin: 10px 0 6px; }
+
+  /* 群聊里每条消息：左侧头像 + 昵称，气泡在昵称下方 */
+  .msg { display: flex; align-items: flex-start; gap: 9px; margin-top: 12px; }
+  .msg.me { flex-direction: row-reverse; }
+
+  .avatar {
+    flex: 0 0 auto;
+    width: 34px; height: 34px; border-radius: 6px;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 15px; font-weight: 600;
+  }
+  .a-zhang { background: linear-gradient(135deg, #7aa7e8, #4f7fd0); }
+  .a-li    { background: linear-gradient(135deg, #e8a37a, #d07f4f); }
+  .a-wang  { background: linear-gradient(135deg, #9f8fe0, #7a63cf); }
+  .a-me    { background: linear-gradient(135deg, #6fd0b4, #2bc4a0); }
+
+  .body { max-width: 76%; }
+  .msg.me .body { display: flex; flex-direction: column; align-items: flex-end; }
+
+  .who { font-size: 12px; color: #8a8a8e; margin: 0 0 3px 3px; }
+  .bubble {
+    padding: 9px 13px; border-radius: 16px;
+    font-size: 16.5px; line-height: 1.45; word-break: break-word;
+    display: inline-block;
+  }
+  .them .bubble { background: #fff; color: #111; border-top-left-radius: 5px; }
+  .me   .bubble { background: #0a84ff; color: #fff; border-top-right-radius: 5px; }
+
+  .foot { text-align: center; font-size: 11px; color: #b8b8bd; margin-top: 22px; }
+</style>
+</head>
+<body>
+  <header>
+    <div class="avatar a-zhang" style="width:36px;height:36px;border-radius:50%">群</div>
+    <div>
+      <div class="title">项目组（4）</div>
+      <div class="sub">群聊</div>
+    </div>
+  </header>
+
+  <div class="thread">
+    <div class="day">今天 14:02</div>
+
+    <div class="msg them">
+      <div class="avatar a-zhang">张</div>
+      <div class="body">
+        <div class="who">张三</div>
+        <div class="bubble">你昨天为什么没来</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-li">李</div>
+      <div class="body">
+        <div class="who">李四</div>
+        <div class="bubble">我有事</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-zhang">张</div>
+      <div class="body">
+        <div class="who">张三</div>
+        <div class="bubble">每次都这样</div>
+      </div>
+    </div>
+
+    <div class="msg me">
+      <div class="avatar a-me">我</div>
+      <div class="body">
+        <div class="who">我</div>
+        <div class="bubble">你们先聊，我晚点说</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-wang">王</div>
+      <div class="body">
+        <div class="who">王五</div>
+        <div class="bubble">所以几点开始</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-zhang">张</div>
+      <div class="body">
+        <div class="who">张三</div>
+        <div class="bubble">还没定</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-wang">王</div>
+      <div class="body">
+        <div class="who">王五</div>
+        <div class="bubble">那先按老时间？</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-li">李</div>
+      <div class="body">
+        <div class="who">李四</div>
+        <div class="bubble">我都行</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-zhang">张</div>
+      <div class="body">
+        <div class="who">张三</div>
+        <div class="bubble">那就八点</div>
+      </div>
+    </div>
+
+    <div class="msg them">
+      <div class="avatar a-wang">王</div>
+      <div class="body">
+        <div class="who">王五</div>
+        <div class="bubble">@李四 你别又迟到</div>
+      </div>
+    </div>
+
+    <div class="foot">虚构内容 · 仅用于演示与测试</div>
+  </div>
+</body>
+</html>

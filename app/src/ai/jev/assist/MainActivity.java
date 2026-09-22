@@ -75,6 +75,15 @@ public class MainActivity extends Activity {
             }
         });
 
+        findViewById(R.id.demo_group).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Intent intent = new Intent(MainActivity.this, DemoActivity.class);
+                intent.putExtra(DemoActivity.EXTRA_GROUP, true);
+                startActivity(intent);
+            }
+        });
+
         findViewById(R.id.snapshot).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
