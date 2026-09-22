@@ -397,12 +397,15 @@ public final class DecisionSpec {
             sb.append(awaiting >= 0.5 ? "对方在等回复" : "对方没在等");
         }
 
-        String strategy = choice(answers, "strategy");
-        if (strategy.length() > 0 && !"?".equals(strategy)) {
+        // 报意图，不报策略。标题本来就是从意图和策略共同推出来的结论，末段再复述一遍
+        // 「判定策略 共情安抚」，和标题「先听完，别讲道理」说的是同一件事，等于没报。
+        // 而意图是标题的主要依据，用户看不到它就无从判断这条建议是从哪来的。
+        String intent = choice(answers, "intent");
+        if (intent.length() > 0 && !"?".equals(intent)) {
             if (sb.length() > 0) {
                 sb.append(" · ");
             }
-            sb.append("判定策略 ").append(zhValue(strategy));
+            sb.append("对方意图 ").append(zhValue(intent));
         }
 
         return sb.toString();
