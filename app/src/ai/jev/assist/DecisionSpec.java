@@ -121,8 +121,7 @@ public final class DecisionSpec {
     }
 
     /** 把一条判定渲染成「标签：结论 (置信度)」的单行文本。 */
-    static String renderOne(String key, JSONObject answer) {
-        if (answer == null) {
+    static String renderOne(String key, JSONObject answer) {        if (answer == null) {
             return zh(key) + "：无返回";
         }
         String type = answer.optString("type", "");
@@ -249,6 +248,175 @@ public final class DecisionSpec {
         double r = risk == null ? 0 : risk.optDouble("noul", 0);
         double t = tension == null ? 0 : tension.optDouble("score", 0);
         return r >= 0.6 || t >= 2.0;
+    }
+
+    // ---- 人话层 ----
+    //
+    // 原始的 noul/choice/score 是给机器看的：一个「表达不满 25%」摆在用户面前，
+    // 他既不知道 25% 是程度还是把握，也不知道该拿它做什么。所以对外只暴露两样东西：
+    // 一句能直接照着做的结论，和两句解释。原始判定降级成一行小字依据。
+
+    /** 结论：一句话，直接告诉用户该怎么做。胶囊和卡片标题都用它。 */
+    static String plainHeadline(JSONObject answers) {
+        double tension = score(answers, "tension");
+        double risk = noul(answers, "risk");
+        double awaiting = noul(answers, "awaiting_reply");
+        String intent = choice(answers, "intent");
+        String strategy = choice(answers, "strategy");
+
+        if (tension >= 2 && risk >= 0.6) {
+            return "先别急着回";
+        }
+        if ("complaint".equals(intent) && tension >= 1.5) {
+            return "别解释，先认下来";
+        }
+        if ("venting".equals(intent)) {
+            return "先听完，别讲道理";
+        }
+        if ("invitation".equals(intent)) {
+            return "给个准话，别拖着";
+        }
+        // 策略放在风险前面：风险只说明"这句容易踩雷"，策略才说得出该怎么回。
+        // 反过来会让标题说"小心点"、正文却说"简短回一句"，两句话打架。
+        if ("warm_comfort".equals(strategy)) {
+            return tension >= 1.5 ? "先别急着回" : "先把情绪接住";
+        }
+        if ("defer".equals(strategy)) {
+            return "先应一声，稍后细说";
+        }
+        if ("hold_distance".equals(strategy)) {
+            return "简短回一句就好";
+        }
+        if ("playful".equals(strategy)) {
+            return "可以开个玩笑";
+        }
+        if ("direct_answer".equals(strategy)) {
+            return "直接回答就行";
+        }
+        if ("explain_facts".equals(strategy)) {
+            return "把话说清楚就行";
+        }
+        if (tension >= 2) {
+            return "语气放软一点";
+        }
+        if (awaiting < 0.5 && tension < 0.5) {
+            return "这条可以不用回";
+        }
+        if (risk >= 0.6) {
+            return "想清楚再发";
+        }
+        return "正常回就行";
+    }
+
+    /** 解释：第一句说对方现在什么状态，第二句说具体怎么回。 */
+    static String plainAdvice(JSONObject answers) {
+        double tension = score(answers, "tension");
+        String intent = choice(answers, "intent");
+        String strategy = choice(answers, "strategy");
+
+        StringBuilder sb = new StringBuilder();
+
+        // 第一句：对方的处境
+        String mood;
+        if (tension >= 2.5) {
+            mood = "对方正在气头上";
+        } else if (tension >= 1.5) {
+            mood = "对方已经不太高兴了";
+        } else if (tension >= 0.5) {
+            mood = "对方有点在意";
+        } else {
+            mood = "对方情绪正常";
+        }
+        sb.append(mood);
+
+        String tail;
+        if ("complaint".equals(intent)) {
+            tail = "，觉得你哪里没做好";
+        } else if ("venting".equals(intent)) {
+            tail = "，只是想找个人说说";
+        } else if ("probing".equals(intent)) {
+            tail = "，在试探你的态度";
+        } else if ("invitation".equals(intent)) {
+            tail = "，在等你答复";
+        } else if ("closing".equals(intent)) {
+            tail = "，想把话收尾了";
+        } else if ("question".equals(intent)) {
+            tail = "，在等你给个答案";
+        } else if ("smalltalk".equals(intent)) {
+            tail = "，没什么正事";
+        } else {
+            tail = "";
+        }
+        sb.append(tail).append('。').append('\n');
+
+        // 第二句：怎么做
+        if ("warm_comfort".equals(strategy)) {
+            sb.append("先说一句安抚的话，把对方的感受接住，别急着解释。");
+        } else if ("explain_facts".equals(strategy)) {
+            sb.append("把来龙去脉说清楚就行，不用绕。");
+        } else if ("playful".equals(strategy)) {
+            sb.append("用轻松的方式回，把气氛带回日常。");
+        } else if ("direct_answer".equals(strategy)) {
+            sb.append("直接回答对方问的那件事，别扯别的。");
+        } else if ("defer".equals(strategy)) {
+            sb.append("先回一句收到了，说稍后认真回，别让对方干等。");
+        } else if ("hold_distance".equals(strategy)) {
+            sb.append("简短回一句，不展开这个话题。");
+        } else {
+            sb.append("正常回一句就可以。");
+        }
+        return sb.toString();
+    }
+
+    /** 依据：原始判定压成一行小字，想深究的人能看，不想看的人可以忽略。 */
+    static String evidence(JSONObject answers) {
+        StringBuilder sb = new StringBuilder();
+
+        double tension = score(answers, "tension");
+        if (tension >= 0) {
+            sb.append("情绪 ").append(trimNum(tension)).append('/').append(SCORE_LEGEND.length - 1);
+        }
+
+        double risk = noul(answers, "risk");
+        if (risk >= 0) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append("踩雷风险 ").append(Math.round(risk * 100)).append('%');
+        }
+
+        double awaiting = noul(answers, "awaiting_reply");
+        if (awaiting >= 0) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append(awaiting >= 0.5 ? "对方在等回复" : "对方没在等");
+        }
+
+        String strategy = choice(answers, "strategy");
+        if (strategy.length() > 0 && !"?".equals(strategy)) {
+            if (sb.length() > 0) {
+                sb.append(" · ");
+            }
+            sb.append("判定策略 ").append(zhValue(strategy));
+        }
+
+        return sb.toString();
+    }
+
+    private static double noul(JSONObject answers, String key) {
+        JSONObject o = answers.optJSONObject(key);
+        return o == null ? -1 : o.optDouble("noul", -1);
+    }
+
+    private static double score(JSONObject answers, String key) {
+        JSONObject o = answers.optJSONObject(key);
+        return o == null ? -1 : o.optDouble("score", -1);
+    }
+
+    private static String choice(JSONObject answers, String key) {
+        JSONObject o = answers.optJSONObject(key);
+        return o == null ? "?" : o.optString("choice", "?");
     }
 
     private static String zh(String key) {

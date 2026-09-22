@@ -434,10 +434,11 @@ public class OverlayService extends Service {
                             if (seq != requestSeq || dismissed) {
                                 return;
                             }
-                            headlineText = DecisionSpec.headline(answers);
-                            bodyText = DecisionSpec.renderAll(answers);
-                            metaText = meta;
-                            pillText = DecisionSpec.pillSummary(answers);
+                            headlineText = DecisionSpec.plainHeadline(answers);
+                            bodyText = DecisionSpec.plainAdvice(answers);
+                            // 原始判定不再占正文，压成一行小字放在下面当依据
+                            metaText = DecisionSpec.evidence(answers);
+                            pillText = DecisionSpec.plainHeadline(answers);
                             riskHigh = DecisionSpec.isRisky(answers);
                             retryable = true;
                             // 判定完成默认只留胶囊：一大块面板在聊天里太挡人
@@ -582,7 +583,8 @@ public class OverlayService extends Service {
         // 同样的窗口参数（局部 735x601、blurBehindRadius=47），有时只糊卡片背后，
         // 有时把整个屏幕都糊掉，聊天界面就读不了了。一个会偶发毁掉主场景的效果不值当，
         // 所以玻璃质感全部由 bg_card 的分层来出。
-        int cardWidth = (int) (280 * density);
+        // 人话版正文是两句话，比原来那五行更宽，卡片相应放宽一点
+        int cardWidth = (int) (312 * density);
         cardParams = new WindowManager.LayoutParams(
                 cardWidth,
                 WindowManager.LayoutParams.WRAP_CONTENT,
