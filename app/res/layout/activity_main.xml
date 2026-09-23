@@ -1,236 +1,73 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="#FFF2F2F7"
-    android:fillViewport="true">
+    android:id="@+id/home_scroll" android:layout_width="match_parent" android:layout_height="match_parent"
+    android:background="#FFF4F7FB" android:fillViewport="true" android:clipToPadding="false" android:paddingBottom="24dp">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:paddingLeft="20dp" android:paddingTop="16dp" android:paddingRight="20dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:gravity="center_vertical" android:orientation="horizontal">
+            <ImageView android:layout_width="52dp" android:layout_height="52dp" android:contentDescription="@string/home_title" android:src="@mipmap/ic_launcher" />
+            <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_marginLeft="12dp" android:layout_weight="1" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="@string/home_title" android:textColor="#FF102D52" android:textSize="23sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:text="@string/home_subtitle" android:textColor="#FF718198" android:textSize="12sp" />
+            </LinearLayout>
+            <TextView android:id="@+id/status_badge" android:layout_width="wrap_content" android:layout_height="wrap_content" android:background="@drawable/bg_status_warning" android:text="@string/status_setup" android:textColor="#FF9B5C12" android:textSize="12sp" android:textStyle="bold" />
+        </LinearLayout>
 
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="vertical"
-        android:padding="20dp">
+        <LinearLayout android:id="@+id/runtime_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:background="@drawable/bg_home_card" android:orientation="vertical" android:padding="16dp">
+            <TextView android:id="@+id/runtime_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/runtime_stopped" android:textColor="#FF102D52" android:textSize="19sp" android:textStyle="bold" />
+            <TextView android:id="@+id/runtime_hint" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:text="先完成权限设置，再启动悬浮球。" android:textColor="#FF718198" android:textSize="12sp" />
+            <Button android:id="@+id/runtime_action" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="14dp" android:background="@drawable/bg_home_btn_primary" android:minHeight="48dp" android:text="@string/action_finish_setup" android:textAllCaps="false" android:textColor="#FFFFFFFF" android:textSize="15sp" android:textStyle="bold" />
+            <include layout="@layout/home_permission_row" android:id="@+id/permission_a11y_row" />
+            <include layout="@layout/home_permission_row" android:id="@+id/permission_overlay_row" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="18dp" android:text="判定模式" android:textColor="#FF243B57" android:textSize="12sp" android:textStyle="bold" />
+            <LinearLayout android:id="@+id/mode_selector" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="7dp" android:background="#0D12345B" android:gravity="center" android:padding="4dp">
+                <Button android:id="@+id/mode_remote" android:layout_width="0dp" android:layout_height="48dp" android:layout_weight="1" android:background="@drawable/bg_segment_unselected" android:minHeight="48dp" android:text="@string/mode_remote" android:textAllCaps="false" android:textColor="#FF718198" android:textSize="13sp" />
+                <Button android:id="@+id/mode_local" android:layout_width="0dp" android:layout_height="48dp" android:layout_marginLeft="4dp" android:layout_weight="1" android:background="@drawable/bg_segment_unselected" android:minHeight="48dp" android:text="@string/mode_local" android:textAllCaps="false" android:textColor="#FF718198" android:textSize="13sp" />
+            </LinearLayout>
+        </LinearLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Jev 僚机"
-            android:textColor="#FF0E8C74"
-            android:textSize="22sp"
-            android:textStyle="bold" />
+        <LinearLayout android:id="@+id/recent_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="@drawable/bg_home_card" android:orientation="vertical" android:padding="16dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/recent_title" android:textColor="#FF102D52" android:textSize="17sp" android:textStyle="bold" />
+            <TextView android:id="@+id/recent_empty" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="@string/recent_empty" android:textColor="#FF718198" android:textSize="13sp" />
+            <LinearLayout android:id="@+id/recent_content" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:id="@+id/recent_summary" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:textColor="#FF102D52" android:textSize="16sp" android:textStyle="bold" />
+                <TextView android:id="@+id/recent_source" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="7dp" android:textColor="#FF718198" android:textSize="12sp" />
+                <TextView android:id="@+id/recent_time" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="#FF718198" android:textSize="12sp" />
+                <TextView android:id="@+id/recent_meta" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="5dp" android:textColor="#FF0E806F" android:textSize="12sp" />
+            </LinearLayout>
+            <Button android:id="@+id/recent_capture_toggle" android:layout_width="wrap_content" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="@string/recent_capture" android:textAllCaps="false" android:textColor="#FF0E806F" android:textSize="12sp" />
+            <ScrollView android:id="@+id/recent_capture_content" android:layout_width="match_parent" android:layout_height="160dp" android:layout_marginTop="8dp" android:background="#080E2A4D" android:padding="10dp" android:visibility="gone"><TextView android:id="@+id/recent_capture_text" android:layout_width="match_parent" android:layout_height="wrap_content" android:lineSpacingExtra="3dp" android:textColor="#FF405A75" android:textSize="11sp" /></ScrollView>
+        </LinearLayout>
 
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:lineSpacingExtra="3dp"
-            android:text="Jev 不生成回复文本，只给类型化判定：是否在等你回、对方意图、情绪强度、说错话风险、该用哪种策略。决定权在你手里。"
-            android:textColor="#FF8E8E93"
-            android:textSize="12sp" />
-
-        <TextView
-            android:id="@+id/status"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bg_card"
-            android:lineSpacingExtra="4dp"
-            android:padding="12dp"
-            android:text=""
-            android:textColor="#FF1C1C1E"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
-            android:text="判定端点"
-            android:textColor="#FF1C1C1E"
-            android:textSize="13sp" />
-
-        <EditText
-            android:id="@+id/endpoint"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_card"
-            android:hint="http://192.168.31.217:8890/v1/systemone"
-            android:inputType="textUri"
-            android:padding="10dp"
-            android:textColor="#FF1C1C1E"
-            android:textColorHint="#FFC7C7CC"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="模型名"
-            android:textColor="#FF1C1C1E"
-            android:textSize="13sp" />
-
-        <EditText
-            android:id="@+id/model"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_card"
-            android:hint="jev-latest"
-            android:inputType="text"
-            android:padding="10dp"
-            android:textColor="#FF1C1C1E"
-            android:textColorHint="#FFC7C7CC"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="API Key（本地服务留空即可）"
-            android:textColor="#FF1C1C1E"
-            android:textSize="13sp" />
-
-        <EditText
-            android:id="@+id/apikey"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_card"
-            android:hint="可留空"
-            android:inputType="text"
-            android:padding="10dp"
-            android:textColor="#FF1C1C1E"
-            android:textColorHint="#FFC7C7CC"
-            android:textSize="12sp" />
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="上下文行数"
-            android:textColor="#FF1C1C1E"
-            android:textSize="13sp" />
-
-        <EditText
-            android:id="@+id/lines"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="@drawable/bg_card"
-            android:hint="12"
-            android:inputType="number"
-            android:padding="10dp"
-            android:textColor="#FF1C1C1E"
-            android:textColorHint="#FFC7C7CC"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/save"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bg_btn_primary"
-            android:text="保存"
-            android:textAllCaps="false"
-            android:textColor="#FF0B1412"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/test"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="测试判定"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/demo"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_primary"
-            android:text="演示 · 私聊（有情绪）"
-            android:textAllCaps="false"
-            android:textColor="#FFFFFFFF" />
-
-        <Button
-            android:id="@+id/demo_calm"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="演示 · 私聊（日常）"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/demo_group"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="演示 · 群聊"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/snapshot"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="抓一次看看（当前窗口）"
-            android:textAllCaps="false"
-            android:textColor="#FF0E8C74" />
-
-        <Button
-            android:id="@+id/mode"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="切换判定模式（本地）"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/localcheck"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="加载本地模型并自检"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/accessibility"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="开启读屏无障碍"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <Button
-            android:id="@+id/toggle"
-            android:layout_width="match_parent"
-            android:layout_height="46dp"
-            android:layout_marginTop="8dp"
-            android:background="@drawable/bg_btn_ghost"
-            android:text="启动悬浮球"
-            android:textAllCaps="false"
-            android:textColor="#FF1C1C1E" />
-
-        <TextView
-            android:id="@+id/output"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:background="@drawable/bg_card"
-            android:lineSpacingExtra="4dp"
-            android:padding="12dp"
-            android:text=""
-            android:textColor="#FF8E8E93"
-            android:textSize="11sp" />
+        <LinearLayout android:id="@+id/more_card" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="14dp" android:background="@drawable/bg_home_card" android:orientation="vertical" android:padding="16dp">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:text="@string/more_title" android:textColor="#FF102D52" android:textSize="17sp" android:textStyle="bold" />
+            <Button android:id="@+id/demo_entry" android:layout_width="match_parent" android:layout_height="58dp" android:layout_marginTop="10dp" android:background="@drawable/bg_home_btn_secondary" android:gravity="left|center_vertical" android:minHeight="48dp" android:paddingLeft="14dp" android:text="@string/demo_entry_title" android:textAllCaps="false" android:textColor="#FF103A68" android:textSize="14sp" android:textStyle="bold" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="-23dp" android:paddingLeft="29dp" android:paddingRight="14dp" android:text="@string/demo_entry_desc" android:textColor="#FF718198" android:textSize="11sp" android:clickable="false" />
+            <Button android:id="@+id/advanced_toggle" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="16dp" android:background="@drawable/bg_home_btn_secondary" android:gravity="left|center_vertical" android:minHeight="48dp" android:text="@string/advanced_title" android:textAllCaps="false" android:textColor="#FF243B57" android:textSize="14sp" android:textStyle="bold" />
+            <LinearLayout android:id="@+id/advanced_content" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="判定端点" android:textColor="#FF243B57" android:textSize="12sp" />
+                <EditText android:id="@+id/endpoint" android:layout_width="match_parent" android:layout_height="48dp" android:background="@drawable/bg_home_btn_secondary" android:hint="http://192.168.31.217:8890/v1/systemone" android:inputType="textUri" android:padding="10dp" android:textColor="#FF243B57" android:textColorHint="#FFA2ADBC" android:textSize="12sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="模型名" android:textColor="#FF243B57" android:textSize="12sp" />
+                <EditText android:id="@+id/model" android:layout_width="match_parent" android:layout_height="48dp" android:background="@drawable/bg_home_btn_secondary" android:hint="jev-latest" android:inputType="text" android:padding="10dp" android:textColor="#FF243B57" android:textColorHint="#FFA2ADBC" android:textSize="12sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="API Key（本地服务留空即可）" android:textColor="#FF243B57" android:textSize="12sp" />
+                <EditText android:id="@+id/apikey" android:layout_width="match_parent" android:layout_height="48dp" android:background="@drawable/bg_home_btn_secondary" android:hint="可留空" android:inputType="textPassword" android:padding="10dp" android:textColor="#FF243B57" android:textColorHint="#FFA2ADBC" android:textSize="12sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:text="上下文行数" android:textColor="#FF243B57" android:textSize="12sp" />
+                <EditText android:id="@+id/lines" android:layout_width="match_parent" android:layout_height="48dp" android:background="@drawable/bg_home_btn_secondary" android:hint="12" android:inputType="number" android:padding="10dp" android:textColor="#FF243B57" android:textColorHint="#FFA2ADBC" android:textSize="12sp" />
+                <Button android:id="@+id/save" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="12dp" android:background="@drawable/bg_home_btn_primary" android:minHeight="48dp" android:text="保存高级设置" android:textAllCaps="false" android:textColor="#FFFFFFFF" />
+            </LinearLayout>
+            <Button android:id="@+id/diagnostics_toggle" android:layout_width="match_parent" android:layout_height="52dp" android:layout_marginTop="10dp" android:background="@drawable/bg_home_btn_secondary" android:gravity="left|center_vertical" android:minHeight="48dp" android:text="@string/diagnostics_title" android:textAllCaps="false" android:textColor="#FF243B57" android:textSize="14sp" android:textStyle="bold" />
+            <LinearLayout android:id="@+id/diagnostics_content" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:visibility="gone">
+                <Button android:id="@+id/test" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="10dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="测试判定" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/snapshot" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="抓一次看看（当前窗口）" android:textAllCaps="false" android:textColor="#FF0E806F" />
+                <Button android:id="@+id/localcheck" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="加载本地模型并自检" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/accessibility" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="开启读屏无障碍" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/toggle" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="启动悬浮球" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/mode" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="切换判定模式" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/demo" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="演示 · 私聊（有情绪）" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/demo_calm" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="演示 · 私聊（日常）" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <Button android:id="@+id/demo_group" android:layout_width="match_parent" android:layout_height="48dp" android:layout_marginTop="8dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="演示 · 群聊" android:textAllCaps="false" android:textColor="#FF243B57" />
+                <TextView android:id="@+id/status" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="#080E2A4D" android:padding="12dp" android:textColor="#FF405A75" android:textSize="11sp" />
+                <TextView android:id="@+id/output" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="10dp" android:background="#080E2A4D" android:lineSpacingExtra="4dp" android:padding="12dp" android:textColor="#FF405A75" android:textSize="11sp" />
+            </LinearLayout>
+        </LinearLayout>
     </LinearLayout>
 </ScrollView>

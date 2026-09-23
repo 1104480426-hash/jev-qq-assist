@@ -1,9 +1,12 @@
 package ai.jev.assist;
 
 import android.app.Activity;
+import android.app.AlertDialog;
 import android.content.ComponentName;
 import android.content.Context;
+import android.content.DialogInterface;
 import android.content.Intent;
+import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,6 +15,8 @@ import android.text.TextUtils;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.json.JSONObject;
@@ -28,6 +33,45 @@ public class MainActivity extends Activity {
     private Button toggleButton;
     private Button modeButton;
 
+    private ScrollView homeScroll;
+    private LinearLayout a11yRow;
+    private LinearLayout overlayRow;
+    private LinearLayout recentContent;
+    private LinearLayout advancedContent;
+    private LinearLayout diagnosticsContent;
+    private ScrollView captureContent;
+    private TextView statusBadge;
+    private TextView runtimeTitle;
+    private TextView runtimeHint;
+    private TextView a11yStatus;
+    private TextView overlayStatus;
+    private TextView recentEmpty;
+    private TextView recentSummary;
+    private TextView recentSource;
+    private TextView recentTime;
+    private TextView recentMeta;
+    private TextView recentCaptureText;
+    private Button runtimeAction;
+    private Button a11yAction;
+    private Button overlayAction;
+    private Button modeRemoteButton;
+    private Button modeLocalButton;
+    private Button recentCaptureToggle;
+    private Button demoEntry;
+    private Button advancedToggle;
+    private Button diagnosticsToggle;
+    private boolean advancedExpanded;
+    private boolean diagnosticsExpanded;
+    private boolean captureExpanded;
+    private int restoredScrollY;
+    private String latestHeadline = "";
+    private String latestMeta = "";
+    private String latestSource = "";
+    private String latestTranscript = "";
+    private long latestAt;
+    private boolean decisionInFlight;
+    private boolean activityDestroyed;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -40,6 +84,60 @@ public class MainActivity extends Activity {
         statusView = (TextView) findViewById(R.id.status);
         outputView = (TextView) findViewById(R.id.output);
         toggleButton = (Button) findViewById(R.id.toggle);
+        modeButton = (Button) findViewById(R.id.mode);
+        homeScroll = (ScrollView) findViewById(R.id.home_scroll);
+        runtimeAction = (Button) findViewById(R.id.runtime_action);
+        statusBadge = (TextView) findViewById(R.id.status_badge);
+        runtimeTitle = (TextView) findViewById(R.id.runtime_title);
+        runtimeHint = (TextView) findViewById(R.id.runtime_hint);
+        a11yRow = (LinearLayout) findViewById(R.id.permission_a11y_row);
+        overlayRow = (LinearLayout) findViewById(R.id.permission_overlay_row);
+        a11yStatus = (TextView) a11yRow.findViewById(R.id.permission_status);
+        overlayStatus = (TextView) overlayRow.findViewById(R.id.permission_status);
+        a11yAction = (Button) a11yRow.findViewById(R.id.permission_action);
+        overlayAction = (Button) overlayRow.findViewById(R.id.permission_action);
+        TextView a11yTitle = (TextView) a11yRow.findViewById(R.id.permission_title);
+        TextView a11yDesc = (TextView) a11yRow.findViewById(R.id.permission_desc);
+        TextView overlayTitle = (TextView) overlayRow.findViewById(R.id.permission_title);
+        TextView overlayDesc = (TextView) overlayRow.findViewById(R.id.permission_desc);
+        a11yTitle.setText("读取聊天内容");
+        a11yDesc.setText("让 Jev 读取当前聊天窗口，点悬浮球时才会抓取。");
+        overlayTitle.setText("显示悬浮球");
+        overlayDesc.setText("允许悬浮球出现在 QQ 等聊天应用上方。");
+        modeRemoteButton = (Button) findViewById(R.id.mode_remote);
+        modeLocalButton = (Button) findViewById(R.id.mode_local);
+        recentContent = (LinearLayout) findViewById(R.id.recent_content);
+        recentEmpty = (TextView) findViewById(R.id.recent_empty);
+        recentSummary = (TextView) findViewById(R.id.recent_summary);
+        recentSource = (TextView) findViewById(R.id.recent_source);
+        recentTime = (TextView) findViewById(R.id.recent_time);
+        recentMeta = (TextView) findViewById(R.id.recent_meta);
+        recentCaptureToggle = (Button) findViewById(R.id.recent_capture_toggle);
+        captureContent = (ScrollView) findViewById(R.id.recent_capture_content);
+        recentCaptureText = (TextView) findViewById(R.id.recent_capture_text);
+        demoEntry = (Button) findViewById(R.id.demo_entry);
+        advancedToggle = (Button) findViewById(R.id.advanced_toggle);
+        advancedContent = (LinearLayout) findViewById(R.id.advanced_content);
+        diagnosticsToggle = (Button) findViewById(R.id.diagnostics_toggle);
+        diagnosticsContent = (LinearLayout) findViewById(R.id.diagnostics_content);
+
+        if (savedInstanceState != null) {
+            advancedExpanded = savedInstanceState.getBoolean("advancedExpanded", false);
+            diagnosticsExpanded = savedInstanceState.getBoolean("diagnosticsExpanded", false);
+            captureExpanded = savedInstanceState.getBoolean("captureExpanded", false);
+            restoredScrollY = savedInstanceState.getInt("homeScrollY", 0);
+            latestHeadline = savedInstanceState.getString("latestHeadline", "");
+            latestMeta = savedInstanceState.getString("latestMeta", "");
+            latestSource = savedInstanceState.getString("latestSource", "");
+            latestTranscript = savedInstanceState.getString("latestTranscript", "");
+            latestAt = savedInstanceState.getLong("latestAt", 0L);
+            if (savedInstanceState.getBoolean("decisionInFlight", false)) {
+                latestHeadline = "判定已取消";
+                latestMeta = "页面重建后请重新判定";
+                latestTranscript = "";
+                decisionInFlight = false;
+            }
+        }
 
         endpointBox.setText(Prefs.endpoint(this));
         modelBox.setText(Prefs.model(this));
@@ -55,8 +153,8 @@ public class MainActivity extends Activity {
             @Override
             public void onClick(View v) {
                 save();
-                refreshStatus();
-                outputView.setText("已保存。");
+                showInlineMessage("已保存。", false);
+                refreshUi();
             }
         });
 
@@ -96,13 +194,10 @@ public class MainActivity extends Activity {
             }
         });
 
-        modeButton = (Button) findViewById(R.id.mode);
         modeButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Prefs.setMode(MainActivity.this,
-                        Prefs.isLocal(MainActivity.this) ? Prefs.MODE_REMOTE : Prefs.MODE_LOCAL);
-                refreshStatus();
+                switchMode();
             }
         });
 
@@ -123,39 +218,110 @@ public class MainActivity extends Activity {
         toggleButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                save();
-                if (OverlayService.running) {
-                    startService(new Intent(MainActivity.this, OverlayService.class)
-                            .setAction(OverlayService.ACTION_STOP));
-                } else {
-                    if (!canOverlay()) {
-                        requestOverlay();
-                        return;
-                    }
-                    Intent intent = new Intent(MainActivity.this, OverlayService.class);
-                    intent.setAction(OverlayService.ACTION_START);
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                        startForegroundService(intent);
-                    } else {
-                        startService(intent);
-                    }
+                toggleService();
+            }
+        });
+        runtimeAction.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                toggleService();
+            }
+        });
+        a11yAction.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                openAccessibilitySettings();
+            }
+        });
+        overlayAction.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                requestOverlay();
+            }
+        });
+        modeRemoteButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Prefs.setMode(MainActivity.this, Prefs.MODE_REMOTE);
+                refreshUi();
+            }
+        });
+        modeLocalButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                Prefs.setMode(MainActivity.this, Prefs.MODE_LOCAL);
+                refreshUi();
+            }
+        });
+        demoEntry.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                showDemoChooser();
+            }
+        });
+        advancedToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                advancedExpanded = !advancedExpanded;
+                refreshFoldState();
+            }
+        });
+        diagnosticsToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                diagnosticsExpanded = !diagnosticsExpanded;
+                refreshFoldState();
+            }
+        });
+        recentCaptureToggle.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (!captureExpanded && currentCapturedTranscript().length() == 0) {
+                    showSnapshot();
                 }
-                statusView.postDelayed(new Runnable() {
-                    @Override
-                    public void run() {
-                        refreshStatus();
-                    }
-                }, 400);
+                captureExpanded = !captureExpanded;
+                if (captureExpanded) {
+                    renderCapturePreview();
+                }
+                refreshFoldState();
             }
         });
 
         requestNotificationPermissionIfNeeded();
+        refreshUi();
+        homeScroll.post(new Runnable() {
+            @Override
+            public void run() {
+                homeScroll.scrollTo(0, restoredScrollY);
+            }
+        });
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        refreshStatus();
+        refreshUi();
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle outState) {
+        outState.putBoolean("advancedExpanded", advancedExpanded);
+        outState.putBoolean("diagnosticsExpanded", diagnosticsExpanded);
+        outState.putBoolean("captureExpanded", captureExpanded);
+        outState.putInt("homeScrollY", homeScroll.getScrollY());
+        outState.putString("latestHeadline", latestHeadline);
+        outState.putString("latestMeta", latestMeta);
+        outState.putString("latestSource", latestSource);
+        outState.putString("latestTranscript", latestTranscript);
+        outState.putLong("latestAt", latestAt);
+        outState.putBoolean("decisionInFlight", decisionInFlight);
+        super.onSaveInstanceState(outState);
+    }
+
+    @Override
+    protected void onDestroy() {
+        activityDestroyed = true;
+        super.onDestroy();
     }
 
     private void save() {
@@ -180,73 +346,223 @@ public class MainActivity extends Activity {
     }
 
     private void refreshStatus() {
+        refreshUi();
+    }
+
+    private void refreshUi() {
+        refreshRuntimeCard();
+        refreshModeSelector();
+        refreshRecentCard();
+        refreshFoldState();
+    }
+
+    private void refreshRuntimeCard() {
         boolean overlay = canOverlay();
         boolean a11y = isAccessibilityOn();
-        StringBuilder sb = new StringBuilder();
-        sb.append("悬浮窗权限：").append(overlay ? "已授予" : "未授予");
-        sb.append('\n').append("读屏无障碍：").append(a11y ? "已开启" : "未开启");
-        sb.append('\n').append("按需抓取：")
-                .append(ChatAccessibilityService.isConnected() ? "可用" : "不可用（服务未连上）");
-        sb.append('\n').append("悬浮球：").append(OverlayService.running ? "运行中" : "未运行");
-        if (Prefs.isRemoteDegraded(this)) {
-            sb.append('\n').append("判定模式：远端未填 key，已暂用本地模型")
-                    .append('\n').append("            填上 API Key 后自动切回远端");
+        boolean connected = ChatAccessibilityService.isConnected();
+        boolean running = OverlayService.running;
+        boolean ready = a11y && overlay && connected;
+        String state = HomeUiState.status(a11y, overlay, connected, running);
+        statusBadge.setText(state);
+        statusBadge.setBackgroundResource(running || ready
+                ? R.drawable.bg_status_ready : R.drawable.bg_status_warning);
+        statusBadge.setTextColor(running || ready
+                ? Color.rgb(14, 128, 111) : Color.rgb(155, 92, 18));
+        runtimeTitle.setText(running ? "悬浮球运行中" : "悬浮球已停止");
+        if (!a11y) {
+            runtimeHint.setText("先开启读取聊天内容，Jev 才能知道当前对话。");
+        } else if (!overlay) {
+            runtimeHint.setText("再允许显示悬浮球，就可以在聊天窗口使用。");
+        } else if (running) {
+            runtimeHint.setText("去聊天窗口点悬浮球，查看当前对话的决策建议。");
+        } else if (!connected) {
+            runtimeHint.setText("无障碍权限已开，但服务还未连接，请稍候或重新开启。");
         } else {
-            sb.append('\n').append("判定模式：").append(
-                    Prefs.isLocal(this) ? "本地（模型在手机里，不联网）" : "远端 Jev 兼容端点");
+            runtimeHint.setText("权限已齐，可以随时启动悬浮球。");
         }
+        runtimeAction.setText(HomeUiState.action(a11y, overlay, connected, running));
+        a11yStatus.setText(a11y ? (connected ? "已开启" : "已开启 · 未连接") : "未开启");
+        overlayStatus.setText(overlay ? "已开启" : "未开启");
+        a11yStatus.setTextColor(a11y && connected ? Color.rgb(14, 128, 111) : Color.rgb(179, 90, 24));
+        overlayStatus.setTextColor(overlay ? Color.rgb(14, 128, 111) : Color.rgb(179, 90, 24));
+        a11yAction.setText(a11y && !connected ? "重新连接" : (a11y ? "已开启" : "去开启"));
+        overlayAction.setText(overlay ? "已开启" : "去开启");
+        a11yAction.setEnabled(!a11y || !connected);
+        overlayAction.setEnabled(!overlay);
+    }
 
-        String loadErr = LocalJudge.loadError();
-        if (loadErr != null) {
-            sb.append('\n').append("本地模型：加载失败 · ").append(loadErr);
-        } else if (LocalJudge.peek() != null) {
-            sb.append('\n').append("本地模型：已就绪");
-        } else {
-            sb.append('\n').append("本地模型：未加载（首次判定时自动加载）");
+    private void refreshModeSelector() {
+        boolean local = Prefs.isLocal(this);
+        modeRemoteButton.setBackgroundResource(local
+                ? R.drawable.bg_segment_unselected : R.drawable.bg_segment_selected);
+        modeLocalButton.setBackgroundResource(local
+                ? R.drawable.bg_segment_selected : R.drawable.bg_segment_unselected);
+        modeRemoteButton.setTextColor(local ? Color.rgb(113, 129, 152) : Color.WHITE);
+        modeLocalButton.setTextColor(local ? Color.WHITE : Color.rgb(113, 129, 152));
+        modeRemoteButton.setSelected(!local);
+        modeLocalButton.setSelected(local);
+        modeRemoteButton.setContentDescription("远端 Jev" + (local ? "，未选中" : "，已选中"));
+        modeLocalButton.setContentDescription("本地模型" + (local ? "，已选中" : "，未选中"));
+        modeButton.setText("切换判定模式（当前：" + (local ? "本地" : "远端") + "）");
+    }
+
+    private void refreshRecentCard() {
+        String captured = currentCapturedTranscript();
+        boolean hasCapture = captured.length() > 0;
+        String displayHeadline = "";
+        String displayMeta = "";
+        long displayAt = currentCaptureAt();
+        String serviceTranscript = OverlayService.lastDecisionTranscript();
+        if (HomeUiState.resultMatchesCapture(serviceTranscript, captured)) {
+            displayHeadline = OverlayService.lastDecisionHeadline();
+            displayMeta = OverlayService.lastDecisionMeta();
+            displayAt = OverlayService.lastDecisionAt();
+        } else if (HomeUiState.resultMatchesCapture(latestTranscript, captured)) {
+            displayHeadline = latestHeadline;
+            displayMeta = latestMeta;
+            displayAt = latestAt > 0L ? latestAt : displayAt;
         }
+        recentEmpty.setVisibility(hasCapture ? View.GONE : View.VISIBLE);
+        recentContent.setVisibility(hasCapture ? View.VISIBLE : View.GONE);
+        if (hasCapture) {
+            recentSummary.setText(displayHeadline.length() > 0 ? displayHeadline : "已抓取一段聊天内容");
+            String source = currentCaptureSource();
+            recentSource.setText(source.length() > 0 ? "来源 · " + source : "来源 · 当前聊天窗口");
+            recentTime.setText(displayAt > 0L ? ago(displayAt) : captured.length() + " 字");
+            String stats = currentCaptureStats();
+            recentMeta.setText(displayMeta.length() > 0 ? displayMeta : stats);
+        }
+        recentCaptureToggle.setText(hasCapture ? "查看抓取内容" : "抓取当前窗口");
+        recentCaptureToggle.setEnabled(true);
+        if (captureExpanded) {
+            renderCapturePreview();
+        }
+    }
 
-        // 优先展示点球那一次读了什么。被动缓存会被路上经过的窗口改写——用户从聊天窗口
-        // 切回这里，中途经过桌面，缓存就变成应用图标名了，那不是他要看的东西。
+    private void refreshFoldState() {
+        advancedContent.setVisibility(advancedExpanded ? View.VISIBLE : View.GONE);
+        diagnosticsContent.setVisibility(diagnosticsExpanded ? View.VISIBLE : View.GONE);
+        captureContent.setVisibility(captureExpanded ? View.VISIBLE : View.GONE);
+        advancedToggle.setText(advancedExpanded ? "高级设置 · 收起" : "高级设置");
+        diagnosticsToggle.setText(diagnosticsExpanded ? "开发诊断 · 收起" : "开发诊断");
+        recentCaptureToggle.setText(captureExpanded ? "收起抓取内容"
+                : (currentCapturedTranscript().length() > 0 ? "查看抓取内容" : "抓取当前窗口"));
+    }
+
+    private void renderCapturePreview() {
+        String captured = currentCapturedTranscript();
+        String stats = currentCaptureStats();
+        if (captured.length() == 0) {
+            recentCaptureText.setText("当前还没有抓取内容。点“抓取当前窗口”可以现场检查。");
+            return;
+        }
+        String preview = captured.length() > 900 ? captured.substring(0, 900)
+                + "\n…（还有 " + (captured.length() - 900) + " 字）" : captured;
+        recentCaptureText.setText((stats.length() > 0 ? stats + "\n\n" : "") + preview);
+    }
+
+    private String currentCapturedTranscript() {
         String pinned = ChatAccessibilityService.pinnedTranscript();
-        boolean fromBall = pinned.length() > 0;
-        String captured = fromBall ? pinned : ChatAccessibilityService.cachedTranscript();
-        String src = fromBall
+        return pinned.length() > 0 ? pinned : ChatAccessibilityService.cachedTranscript();
+    }
+
+    private String currentCaptureSource() {
+        return ChatAccessibilityService.pinnedTranscript().length() > 0
                 ? ChatAccessibilityService.pinnedSourceName()
                 : ChatAccessibilityService.captureSourceName();
-        String stats = fromBall
-                ? ChatAccessibilityService.pinnedStats()
-                : ChatAccessibilityService.lastStats();
+    }
 
-        if (captured.length() > 0) {
-            sb.append('\n').append(fromBall ? "上次判定读到：" : "最近读自：");
-            if (src.length() > 0) {
-                sb.append(src).append(" · ");
-            }
-            sb.append(captured.length()).append(" 字");
-            if (fromBall) {
-                String ago = ago(ChatAccessibilityService.pinnedAt());
-                if (ago.length() > 0) {
-                    sb.append(" · ").append(ago);
+    private String currentCaptureStats() {
+        return ChatAccessibilityService.pinnedTranscript().length() > 0
+                ? ChatAccessibilityService.pinnedStats() : ChatAccessibilityService.lastStats();
+    }
+
+    private long currentCaptureAt() {
+        return ChatAccessibilityService.pinnedTranscript().length() > 0
+                ? ChatAccessibilityService.pinnedAt() : 0L;
+    }
+
+    private void showInlineMessage(String message, boolean error) {
+        outputView.setText(message);
+        if (error) {
+            diagnosticsExpanded = true;
+            refreshFoldState();
+        }
+    }
+
+    private void switchMode() {
+        Prefs.setMode(this, Prefs.isLocal(this) ? Prefs.MODE_REMOTE : Prefs.MODE_LOCAL);
+        refreshUi();
+    }
+
+    private void toggleService() {
+        save();
+        if (OverlayService.running) {
+            showInlineMessage("正在停止悬浮球…", false);
+            startService(new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_STOP));
+            runtimeAction.postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    refreshUi();
                 }
-            }
+            }, 400);
+            return;
+        }
+        if (!isAccessibilityOn()) {
+            showInlineMessage("请先开启“读取聊天内容”权限。", true);
+            focusMissingPermission(0);
+            openAccessibilitySettings();
+            return;
+        }
+        if (!canOverlay()) {
+            showInlineMessage("请先开启“显示悬浮球”权限。", true);
+            focusMissingPermission(1);
+            requestOverlay();
+            return;
+        }
+        if (!ChatAccessibilityService.isConnected()) {
+            showInlineMessage("无障碍服务还未连接，请点“重新连接”后再启动。", true);
+            openAccessibilitySettings();
+            return;
+        }
+        showInlineMessage("正在启动悬浮球…", false);
+        Intent intent = new Intent(this, OverlayService.class).setAction(OverlayService.ACTION_START);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
         } else {
-            sb.append('\n').append("上次判定：暂无（去聊天窗口点一下悬浮球）");
+            startService(intent);
         }
-
-        // 把实际抓到的文字摊出来。判定不对时，先看这里：是读错了窗口，
-        // 还是说话人认反了，一眼能分清，不用去猜。
-        if (captured.length() > 0) {
-            if (stats.length() > 0) {
-                sb.append('\n').append(stats);
+        runtimeAction.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                refreshUi();
             }
-            String preview = captured.length() > 240 ? captured.substring(0, 240) + " …" : captured;
-            sb.append("\n\n—— 实际读到 ——\n").append(preview);
-        }
+        }, 400);
+    }
 
-        statusView.setText(sb.toString());
-        toggleButton.setText(OverlayService.running ? "停止悬浮球" : "启动悬浮球");
-        modeButton.setText("切换判定模式（当前："
-                + (Prefs.isLocal(this) ? "本地" : "远端") + "）");
+    private void focusMissingPermission(final int which) {
+        final View target = which == 0 ? a11yRow : overlayRow;
+        target.post(new Runnable() {
+            @Override
+            public void run() {
+                homeScroll.smoothScrollTo(0, target.getTop());
+                target.requestFocus();
+            }
+        });
+    }
+
+    private void showDemoChooser() {
+        final String[] pages = {"private", "calm", "group"};
+        new AlertDialog.Builder(this)
+                .setTitle("选择演示")
+                .setItems(new String[]{"私聊（有情绪）", "私聊（日常）", "群聊"},
+                        new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                openDemo(pages[which]);
+                            }
+                        })
+                .show();
     }
 
     /** 把时间戳讲成人话，让"上次判定读到"带上新鲜度。 */
@@ -277,11 +593,13 @@ public class MainActivity extends Activity {
         String live = ChatAccessibilityService.captureNow();
         if (live == null) {
             outputView.setText("读屏服务未连上，先在系统设置里开启无障碍，再回来点这个按钮。");
+            refreshRecentCard();
             return;
         }
         if (live.length() == 0) {
             outputView.setText("当前窗口没有读到任何文字。\n\n"
                     + "如果是微信，这是正常的——它的界面全自绘，不向无障碍暴露内容。");
+            refreshRecentCard();
             return;
         }
         String preview = live.length() > 900 ? live.substring(0, 900) + "\n…（还有 "
@@ -290,6 +608,10 @@ public class MainActivity extends Activity {
         outputView.setText("—— 当前窗口实际读到 " + live.length() + " 字 ——\n"
                 + (stats.length() > 0 ? stats + "\n" : "")
                 + "\n" + preview);
+        refreshRecentCard();
+        if (captureExpanded) {
+            renderCapturePreview();
+        }
     }
 
     /** 加载本地模型并跑一次自检，全程在后台线程。 */
@@ -431,6 +753,13 @@ public class MainActivity extends Activity {
         final String model = Prefs.model(this);
         final String key = Prefs.apiKey(this);
         final boolean local = Prefs.isLocal(this);
+        latestHeadline = "正在判定…";
+        latestMeta = "";
+        latestSource = local ? "本地模型" : "远端 Jev";
+        latestTranscript = sample;
+        latestAt = System.currentTimeMillis();
+        decisionInFlight = true;
+        refreshRecentCard();
 
         new Thread(new Runnable() {
             @Override
@@ -451,7 +780,17 @@ public class MainActivity extends Activity {
                             runOnUiThread(new Runnable() {
                                 @Override
                                 public void run() {
-                                    outputView.setText("判定失败：" + err + "\n\n端点：" + endpoint);
+                                    if (activityDestroyed) {
+                                        return;
+                                    }
+                                    decisionInFlight = false;
+                                    latestHeadline = "判定失败";
+                                    latestMeta = "请到高级设置检查端点和 API Key";
+                                    latestTranscript = sample;
+                                    latestAt = System.currentTimeMillis();
+                                    outputView.setText("判定失败：" + err + "\n\n端点：" + endpoint
+                                            + "\n\n请到高级设置检查端点和 API Key。");
+                                    refreshRecentCard();
                                 }
                             });
                             return;
@@ -462,16 +801,36 @@ public class MainActivity extends Activity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            outputView.setText(DecisionSpec.headline(answers) + "\n\n"
+                            if (activityDestroyed) {
+                                return;
+                            }
+                            decisionInFlight = false;
+                            latestHeadline = DecisionSpec.headline(answers);
+                            latestMeta = meta;
+                            latestSource = local ? "本地模型" : "远端 Jev";
+                            latestTranscript = sample;
+                            latestAt = System.currentTimeMillis();
+                            outputView.setText(latestHeadline + "\n\n"
                                     + DecisionSpec.renderAll(answers) + "\n\n" + meta);
+                            refreshRecentCard();
                         }
                     });
                 } catch (final Exception e) {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
+                            if (activityDestroyed) {
+                                return;
+                            }
+                            decisionInFlight = false;
+                            latestHeadline = "判定异常";
+                            latestMeta = "请到开发诊断查看错误详情";
+                            latestTranscript = sample;
+                            latestAt = System.currentTimeMillis();
                             outputView.setText("判定异常：" + e.getClass().getSimpleName()
-                                    + ": " + e.getMessage());
+                                    + ": " + e.getMessage()
+                                    + "\n\n请到开发诊断查看错误详情。");
+                            refreshRecentCard();
                         }
                     });
                 }

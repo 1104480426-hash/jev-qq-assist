@@ -85,11 +85,6 @@ public final class LocalDecisionSpec {
                     }),
     };
 
-    /** 上下文向量用的文本。 */
-    static String queryText(Question q, String context) {
-        return "聊天记录：\n" + context + "\n" + q.ask;
-    }
-
     /** 候选向量用的文本。描述本身就是完整句子，直接编码。 */
     static String optionText(Question q, int index) {
         return q.options[index];

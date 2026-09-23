@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- iOS 风格浅色主题：分组背景 + 深色主文字 + 同一套强调色 -->
+    <!-- 主界面使用冷灰背景、深蓝品牌色和青绿色强调色。 -->
     <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">#FFF2F2F7</item>
-        <item name="android:colorBackground">#FFF2F2F7</item>
+        <item name="android:windowBackground">#FFF4F7FB</item>
+        <item name="android:colorBackground">#FFF4F7FB</item>
         <item name="android:textColorPrimary">#FF1C1C1E</item>
         <item name="android:textColorSecondary">#FF8E8E93</item>
         <item name="android:colorAccent">#FF2BC4A0</item>
-        <item name="android:statusBarColor">#FFF2F2F7</item>
-        <item name="android:navigationBarColor">#FFF2F2F7</item>
+        <item name="android:statusBarColor">#FFF4F7FB</item>
+        <item name="android:navigationBarColor">#FFF4F7FB</item>
         <item name="android:windowLightStatusBar">true</item>
         <item name="android:windowLightNavigationBar">true</item>
     </style>

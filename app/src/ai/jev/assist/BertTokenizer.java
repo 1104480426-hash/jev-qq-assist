@@ -77,6 +77,50 @@ public final class BertTokenizer {
         return out;
     }
 
+    /** Reserve the question first, then include complete messages from newest to oldest.
+     * Only an oversized newest message is clipped, keeping its end instead of old history.
+     */
+    public int[] encodeConversation(String context, String question, int maxLen) {
+        List<Integer> prefix = tokenIds("聊天记录：\n");
+        List<Integer> suffix = tokenIds(question);
+        int budget = maxLen - 2 - prefix.size() - suffix.size();
+        if (budget < 1) {
+            throw new IllegalArgumentException("Question leaves no room for conversation");
+        }
+        List<Integer> messages = new ArrayList<>();
+        String[] lines = context.split("\\n");
+        for (int i = lines.length - 1; i >= 0; i--) {
+            if (lines[i].trim().isEmpty()) continue;
+            List<Integer> line = tokenIds(lines[i]);
+            if (line.size() > budget - messages.size()) {
+                if (messages.isEmpty()) {
+                    messages.addAll(line.subList(line.size() - budget, line.size()));
+                }
+                break;
+            }
+            messages.addAll(0, line);
+        }
+        int[] out = new int[2 + prefix.size() + messages.size() + suffix.size()];
+        int at = 0;
+        out[at++] = clsId;
+        for (int id : prefix) out[at++] = id;
+        for (int id : messages) out[at++] = id;
+        for (int id : suffix) out[at++] = id;
+        out[at] = sepId;
+        return out;
+    }
+
+    private List<Integer> tokenIds(String text) {
+        List<Integer> ids = new ArrayList<>();
+        for (String token : basicTokenize(text)) {
+            for (String piece : wordpiece(token)) {
+                Integer id = vocab.get(piece);
+                ids.add(id == null ? unkId : id);
+            }
+        }
+        return ids;
+    }
+
     // ---- BertNormalizer + BertPreTokenizer + WordPiece ----
 
     private List<String> basicTokenize(String text) {

@@ -17,6 +17,7 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 RES = os.path.join(ROOT, "app", "res")
+SOURCE_ICON = os.path.join(ROOT, "docs", "icon-final-source.png")
 
 FOREGROUND_BASE = 432      # 108dp @ 4x
 LEGACY_BASE = 192          # 48dp @ 4x
@@ -29,12 +30,12 @@ DENSITIES = {
     "xxxhdpi": 4.0,
 }
 
-# 玻璃主体的颜色：比上一版亮一档，才有通透感
-GLASS_BRIGHT = (52, 168, 142)
-GLASS_MID = (20, 92, 80)
-GLASS_DEEP = (10, 42, 38)
-BG_TOP = (26, 74, 66)
-BG_BOTTOM = (7, 19, 17)
+# 新版品牌色：深蓝底 + 青绿色双翼，缩小后仍保持轮廓和对比度。
+BG_TOP = (7, 34, 82)
+BG_BOTTOM = (5, 18, 48)
+WING_TEAL = (36, 224, 194)
+WING_MINT = (155, 246, 215)
+MARK_WHITE = (255, 255, 255)
 
 
 def find_font(size):
@@ -172,16 +173,79 @@ def draw_letter(img, size, cx, cy, r):
     return Image.alpha_composite(img, layer)
 
 
+def draw_feather(draw, cx, cy, width, height, side, fill):
+    """画一片简洁的翼羽，side 为 1（右）或 -1（左）。"""
+    s = float(side)
+    def point(x, y):
+        return (cx + s * width * x, cy + height * y)
+
+    def cubic(a, b, c, d, steps=8):
+        points = []
+        for i in range(steps + 1):
+            t = i / steps
+            u = 1 - t
+            points.append((
+                u ** 3 * a[0] + 3 * u * u * t * b[0] + 3 * u * t * t * c[0] + t ** 3 * d[0],
+                u ** 3 * a[1] + 3 * u * u * t * b[1] + 3 * u * t * t * c[1] + t ** 3 * d[1],
+            ))
+        return points
+
+    # 上缘收向外侧尖端，下缘回到内侧，形成连续叶片而非折角箭头。
+    inner_top = point(0.04, -0.28)
+    tip = point(1.00, -0.02)
+    inner_bottom = point(0.08, 0.34)
+    points = cubic(inner_top, point(0.35, -0.44), point(0.80, -0.27), tip)
+    points += cubic(tip, point(0.82, 0.16), point(0.38, 0.42), inner_bottom)[1:]
+    points += [point(0.18, 0.03), inner_top]
+    draw.polygon(points, fill=fill)
+
+
+def draw_wing_mark(img, size, monochrome=False):
+    """画新版僚机徽章：J 主标 + 两侧双翼，保持自适应图标安全边距。"""
+    draw = ImageDraw.Draw(img)
+    cx = cy = size * 0.5
+    wing1 = MARK_WHITE if monochrome else WING_TEAL
+    wing2 = MARK_WHITE if monochrome else WING_MINT
+    wing_w = size * 0.255
+    wing_h = size * 0.145
+    gap = size * 0.145
+    draw_feather(draw, cx - gap, cy - size * 0.105, wing_w, wing_h, -1, wing1)
+    draw_feather(draw, cx + gap, cy - size * 0.105, wing_w, wing_h, 1, wing1)
+    draw_feather(draw, cx - gap, cy + size * 0.075, wing_w * 0.86, wing_h * 0.78, -1, wing2)
+    draw_feather(draw, cx + gap, cy + size * 0.075, wing_w * 0.86, wing_h * 0.78, 1, wing2)
+
+    radius = size * 0.37
+    font = find_font(int(radius * 1.22))
+    text = "J"
+    bbox = draw.textbbox((0, 0), text, font=font)
+    tw, th = bbox[2] - bbox[0], bbox[3] - bbox[1]
+    tx = cx - tw / 2 - bbox[0] + size * 0.005
+    ty = cy - th / 2 - bbox[1] + size * 0.075
+    draw.text((tx, ty), text, font=font, fill=MARK_WHITE)
+
+
 def build_foreground(size):
-    """自适应图标前景：球收在中心安全区内，四周留给系统裁切。"""
+    """自适应图标前景：僚机徽章收在中心安全区内，四周留给系统裁切。"""
     img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    ball, cx, cy, r = build_ball(size, 0.335)
-    img = Image.alpha_composite(img, ball)
-    return draw_letter(img, size, cx, cy, r)
+    mark_size = int(size * 0.78)
+    mark = Image.new("RGBA", (mark_size, mark_size), (0, 0, 0, 0))
+    draw_wing_mark(mark, mark_size)
+    img.alpha_composite(mark, ((size - mark_size) // 2, (size - mark_size) // 2))
+    return img
+
+
+def build_monochrome(size):
+    """Android 13+ 主题图标使用的单色前景。"""
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    mark_size = int(size * 0.78)
+    mark = Image.new("RGBA", (mark_size, mark_size), (0, 0, 0, 0))
+    draw_wing_mark(mark, mark_size, monochrome=True)
+    img.alpha_composite(mark, ((size - mark_size) // 2, (size - mark_size) // 2))
+    return img
 
 
 def build_legacy(size):
-    """传统图标：圆角方形玻璃底 + 同一颗球。"""
+    """传统图标：圆角深蓝底 + 僚机徽章。"""
     base = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     radius = int(size * 0.235)
     mask = Image.new("L", (size, size), 0)
@@ -190,18 +254,6 @@ def build_legacy(size):
     bg = vertical_gradient(size, BG_TOP, BG_BOTTOM, gamma=1.1)
     base = Image.alpha_composite(base, Image.composite(bg, Image.new("RGBA", (size, size), (0, 0, 0, 0)), mask))
 
-    # 板面中上方的受光晕
-    sheen = radial_glow(size, (size * 0.5, size * 0.30), size * 0.72, 74)
-    sheen.putalpha(Image.composite(sheen.getchannel("A"), Image.new("L", (size, size), 0), mask))
-    base = Image.alpha_composite(base, sheen)
-
-    # 顶部一条更亮的窄带，玻璃板的反光
-    top = Image.new("RGBA", (size, size), (255, 255, 255, 0))
-    ImageDraw.Draw(top).rounded_rectangle(
-        [0, 0, size - 1, int(size * 0.42)], radius=radius, fill=(255, 255, 255, 30))
-    top = top.filter(ImageFilter.GaussianBlur(size * 0.06))
-    base = Image.alpha_composite(base, Image.composite(top, Image.new("RGBA", (size, size), (0, 0, 0, 0)), mask))
-
     # 外描边
     ring = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     ImageDraw.Draw(ring).rounded_rectangle(
@@ -209,14 +261,63 @@ def build_legacy(size):
         outline=(255, 255, 255, 60), width=max(1, int(size * 0.009)))
     base = Image.alpha_composite(base, ring)
 
-    ball, cx, cy, r = build_ball(int(size * 0.82), 0.46)
-    ball = draw_letter(ball, int(size * 0.82), cx, cy, r)
-    off = int((size - size * 0.82) / 2)
-    base.alpha_composite(ball, (off, off))
+    mark = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw_wing_mark(mark, size)
+    base.alpha_composite(mark)
     return base
 
 
+def build_from_source():
+    """从确定的最终视觉源生成所有 Android 图标尺寸，避免近似重绘。"""
+    source = Image.open(SOURCE_ICON).convert("RGBA")
+    made = []
+    for name, mult in DENSITIES.items():
+        folder = os.path.join(RES, "mipmap-" + name)
+        os.makedirs(folder, exist_ok=True)
+        legacy_size = int(LEGACY_BASE * mult / 4)
+        foreground_size = int(FOREGROUND_BASE * mult / 4)
+
+        legacy = source.resize((legacy_size, legacy_size), Image.Resampling.LANCZOS)
+        p = os.path.join(folder, "ic_launcher.png")
+        legacy.save(p, "PNG", optimize=True)
+        made.append(p)
+
+        # 自适应图标前景按安全区缩小，底层背景色与源图一致，裁切时不会露白边。
+        mark_size = int(foreground_size * 0.78)
+        mark = source.resize((mark_size, mark_size), Image.Resampling.LANCZOS)
+        foreground = Image.new("RGBA", (foreground_size, foreground_size), (0, 0, 0, 0))
+        foreground.alpha_composite(mark, ((foreground_size - mark_size) // 2, (foreground_size - mark_size) // 2))
+        p = os.path.join(folder, "ic_launcher_foreground.png")
+        foreground.save(p, "PNG", optimize=True)
+        made.append(p)
+
+        # 从同一源图提取高亮标记，生成 Android 主题图标需要的单色层。
+        mask = mark.convert("L").point(lambda value: 255 if value > 92 else 0)
+        mono_mark = Image.new("RGBA", (mark_size, mark_size), (255, 255, 255, 0))
+        mono_mark.putalpha(mask)
+        monochrome = Image.new("RGBA", (foreground_size, foreground_size), (0, 0, 0, 0))
+        monochrome.alpha_composite(mono_mark, ((foreground_size - mark_size) // 2, (foreground_size - mark_size) // 2))
+        p = os.path.join(folder, "ic_launcher_monochrome.png")
+        monochrome.save(p, "PNG", optimize=True)
+        made.append(p)
+
+    preview = source.resize((512, 512), Image.Resampling.LANCZOS)
+    p = os.path.join(ROOT, "docs", "icon.png")
+    preview.save(p, "PNG", optimize=True)
+    made.append(p)
+    small = source.resize((48, 48), Image.Resampling.LANCZOS)
+    p = os.path.join(ROOT, "docs", "icon-48.png")
+    small.save(p, "PNG", optimize=True)
+    made.append(p)
+    return made
+
+
 def main():
+    if os.path.exists(SOURCE_ICON):
+        for path in build_from_source():
+            print("  %-58s %6d B" % (os.path.relpath(path, ROOT), os.path.getsize(path)))
+        return
+
     made = []
     for name, mult in DENSITIES.items():
         folder = os.path.join(RES, "mipmap-" + name)
@@ -230,6 +331,11 @@ def main():
         legacy = build_legacy(int(LEGACY_BASE * mult / 4))
         p = os.path.join(folder, "ic_launcher.png")
         legacy.save(p, "PNG", optimize=True)
+        made.append(p)
+
+        mono = build_monochrome(int(FOREGROUND_BASE * mult / 4))
+        p = os.path.join(folder, "ic_launcher_monochrome.png")
+        mono.save(p, "PNG", optimize=True)
         made.append(p)
 
     preview = build_legacy(512)

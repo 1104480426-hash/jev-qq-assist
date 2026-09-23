@@ -7,4 +7,42 @@
     <string name="fgs_channel">聊天参谋常驻</string>
     <string name="fgs_title">Jev 僚机运行中</string>
     <string name="fgs_text">点悬浮球获取当前对话的决策建议</string>
+
+    <!-- 主界面运行控制台 -->
+    <string name="home_title">Jev 僚机</string>
+    <string name="home_subtitle">先看状态，再决定要不要出手</string>
+    <string name="status_ready">可使用</string>
+    <string name="status_setup">需要设置</string>
+    <string name="status_running">运行中</string>
+    <string name="runtime_stopped">悬浮球已停止</string>
+    <string name="runtime_running">悬浮球运行中</string>
+    <string name="action_start">启动悬浮球</string>
+    <string name="action_stop">停止悬浮球</string>
+    <string name="action_finish_setup">完成设置</string>
+    <string name="permission_a11y_title">读取聊天内容</string>
+    <string name="permission_a11y_desc">让 Jev 读取当前聊天窗口，点悬浮球时才会抓取。</string>
+    <string name="permission_overlay_title">显示悬浮球</string>
+    <string name="permission_overlay_desc">允许悬浮球出现在 QQ 等聊天应用上方。</string>
+    <string name="permission_on">已开启</string>
+    <string name="permission_off">未开启</string>
+    <string name="action_open_settings">去开启</string>
+    <string name="mode_remote">远端 Jev</string>
+    <string name="mode_local">本地模型</string>
+    <string name="recent_title">最近判定</string>
+    <string name="recent_empty">还没有判定，去聊天窗口点悬浮球试一次</string>
+    <string name="recent_capture">查看抓取内容</string>
+    <string name="more_title">更多操作</string>
+    <string name="demo_entry_title">试用演示</string>
+    <string name="demo_entry_desc">用示例对话快速看看 Jev 会怎么判断</string>
+    <string name="advanced_title">高级设置</string>
+    <string name="diagnostics_title">开发诊断</string>
+    <string name="expand_more">展开</string>
+    <string name="collapse_less">收起</string>
+    <string name="saved_message">已保存</string>
+    <string name="missing_a11y_message">请先开启“读取聊天内容”权限。</string>
+    <string name="missing_overlay_message">请先开启“显示悬浮球”权限。</string>
+    <string name="service_starting">正在启动悬浮球…</string>
+    <string name="service_stopping">正在停止悬浮球…</string>
+    <string name="decision_loading">正在判定…</string>
+    <string name="decision_failed_next">判定失败，请到高级设置检查端点和 API Key。</string>
 </resources>

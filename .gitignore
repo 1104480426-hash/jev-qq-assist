@@ -22,3 +22,5 @@ tools/probe_py.txt
 
 # 调试时的过程截图，不要入库
 docs/_*.png
+
+dist/

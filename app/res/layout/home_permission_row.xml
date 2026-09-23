@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:gravity="center_vertical" android:orientation="horizontal">
+    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
+        <TextView android:id="@+id/permission_title" android:layout_width="match_parent" android:layout_height="wrap_content" android:textColor="#FF243B57" android:textSize="14sp" android:textStyle="bold" />
+        <TextView android:id="@+id/permission_desc" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="2dp" android:textColor="#FF718198" android:textSize="11sp" />
+        <TextView android:id="@+id/permission_status" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:textColor="#FFB35A18" android:textSize="11sp" android:textStyle="bold" />
+    </LinearLayout>
+    <Button android:id="@+id/permission_action" android:layout_width="wrap_content" android:layout_height="48dp" android:background="@drawable/bg_home_btn_secondary" android:minHeight="48dp" android:text="@string/action_open_settings" android:textAllCaps="false" android:textColor="#FF0E806F" android:textSize="12sp" />
+</LinearLayout>

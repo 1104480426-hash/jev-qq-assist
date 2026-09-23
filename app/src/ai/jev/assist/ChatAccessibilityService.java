@@ -4,6 +4,8 @@ import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
 import android.graphics.Rect;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.DisplayMetrics;
 import android.util.Log;
 import android.view.WindowManager;
@@ -49,7 +51,7 @@ public class ChatAccessibilityService extends AccessibilityService {
      * 轮询既要定周期又会漏掉一次性的切换。
      */
     public interface WindowWatcher {
-        void onActivePackage(String pkg);
+        void onActiveWindow(CaptureSnapshot snapshot);
     }
 
     private static volatile WindowWatcher windowWatcher;
@@ -58,13 +60,13 @@ public class ChatAccessibilityService extends AccessibilityService {
         windowWatcher = watcher;
     }
 
-    private static void notifyActivePackage(String pkg) {
+    private static void notifyActiveWindow(CaptureSnapshot snapshot) {
         WindowWatcher w = windowWatcher;
         if (w == null) {
             return;
         }
         try {
-            w.onActivePackage(pkg);
+            w.onActiveWindow(snapshot);
         } catch (Exception ignored) {
             // 回调出错不该影响读屏本身
         }
@@ -185,9 +187,6 @@ public class ChatAccessibilityService extends AccessibilityService {
         return instance != null;
     }
 
-    /** 最近一次抓取所属的包名，由 captureActiveWindow 在拿 root 时顺手记下。 */
-    private String pendingPkg = "";
-
     /**
      * 立刻抓一次当前活动窗口并返回转录。
      *
@@ -198,56 +197,47 @@ public class ChatAccessibilityService extends AccessibilityService {
      * <p>返回 null 表示读屏服务没连上。
      */
     public static String captureNow() {
+        CaptureSnapshot snapshot = captureSnapshotNow();
+        return snapshot == null ? null : snapshot.transcript;
+    }
+
+    /** Called on the main thread, like accessibility events; snapshot fields travel together. */
+    public static CaptureSnapshot captureSnapshotNow() {
         ChatAccessibilityService s = instance;
         if (s == null) {
             return null;
         }
-        String fresh = s.captureActiveWindow();
-        if (fresh != null && fresh.length() > 0) {
+        CaptureSnapshot fresh = s.captureActiveWindow();
+        if (fresh != null && fresh.transcript.length() > 0) {
             // 写回缓存。这样用户切回设置页时，看到的就是刚才那次判定实际用的文本，
             // 而不是上一次被动事件留下的、可能来自别的窗口的旧内容。
             //
             // 包名必须用抓取时那一次 root 的。早先在这里重新取了一次
             // getRootInActiveWindow()，结果卡片一弹出来活动窗口就变成通知栏，
             // 界面上如实写着「最近读自 com.android.systemui」。
-            cachedTranscript = fresh;
-            lastCapturePkg = s.pendingPkg;
-            lastCaptureAt = System.currentTimeMillis();
+            cachedTranscript = fresh.transcript;
+            lastCapturePkg = fresh.packageName;
+            lastCaptureAt = fresh.capturedAt;
 
             // 同一份内容钉住。设置页展示的是这一次，不是"最近任何窗口"。
-            pinnedTranscript = fresh;
-            pinnedPkg = s.pendingPkg;
+            pinnedTranscript = fresh.transcript;
+            pinnedPkg = fresh.packageName;
             pinnedAt = lastCaptureAt;
-            pinnedStats = lastStats;
+            pinnedStats = fresh.stats;
         }
         return fresh;
     }
 
-    private String captureActiveWindow() {
+    private CaptureSnapshot captureActiveWindow() {
         traceBuf = new StringBuilder(4096);
         try {
             AccessibilityNodeInfo root = getRootInActiveWindow();
             if (root == null) {
                 trace("! 没有活动窗口");
-                return "";
+                return null;
             }
             try {
-                List<Line> lines = new ArrayList<>();
-                collect(root, lines, 0);
-                if (lines.isEmpty()) {
-                    trace("! 一行都没收下");
-                    return "";
-                }
-                CharSequence p = root.getPackageName();
-                pendingPkg = p == null ? "" : p.toString();
-                trace("包名 " + pendingPkg);
-                DisplayMetrics dm = getResources().getDisplayMetrics();
-                int screenH = realScreenHeight();
-                trace("尺寸 " + dm.widthPixels + "x" + dm.heightPixels
-                        + " 真实高=" + screenH + " density=" + dm.density);
-                String out = buildTranscript(lines, dm.widthPixels, screenH);
-                trace("统计 " + lastStats);
-                return out;
+                return readSnapshot(root);
             } finally {
                 recycleSafely(root);
             }
@@ -255,6 +245,29 @@ public class ChatAccessibilityService extends AccessibilityService {
             Log.i(TAG, "—— 抓取 ——\n" + traceBuf);
             traceBuf = null;
         }
+    }
+
+    private CaptureSnapshot readSnapshot(AccessibilityNodeInfo root) {
+        List<Line> lines = new ArrayList<>();
+        List<Line> headers = new ArrayList<>();
+        int height = realScreenHeight();
+        collect(root, lines, 0, headers, height, getResources().getDisplayMetrics().widthPixels);
+        String owner = root.getPackageName() == null ? "" : root.getPackageName().toString();
+        lastTranscriptLines = 0;
+        lastReading = "";
+        lastStats = "";
+        String transcript = lines.isEmpty() ? ""
+                : buildTranscript(lines, getResources().getDisplayMetrics().widthPixels, height);
+        // Use the same header band as message filtering. No coordinates or clocks in the key.
+        StringBuilder header = new StringBuilder();
+        for (Line line : headers) {
+            header.append(line.text).append('\n');
+        }
+        List<int[]> bands = new ArrayList<>(lines.size());
+        for (Line line : lines) bands.add(new int[]{line.top, line.bottom});
+        cachedBands = bands;
+        return new CaptureSnapshot(transcript, owner, root.getWindowId(), header.toString(),
+                lastTranscriptLines, lastReading, lastStats, System.currentTimeMillis());
     }
 
     /** 界面上常见的非消息文本，命中即丢。 */
@@ -270,6 +283,14 @@ public class ChatAccessibilityService extends AccessibilityService {
 
     private long lastEventAt = 0L;
     private String lastPkg = "";
+    private final Handler events = new Handler(Looper.getMainLooper());
+    private final Runnable trailingCapture = new Runnable() {
+        @Override
+        public void run() {
+            lastEventAt = System.currentTimeMillis();
+            observeActiveWindow();
+        }
+    };
 
     /** 取最近一次的对话转录，无内容时返回空串。 */
     public static String cachedTranscript() {
@@ -337,21 +358,24 @@ public class ChatAccessibilityService extends AccessibilityService {
         if (pkg.length() == 0) {
             return;
         }
-        // 不抓自己的界面。否则用户切回设置页看结果时，缓存立刻被设置页覆盖，
-        // 就永远看不到刚刚在聊天窗口里到底抓到了什么。
-        if (pkg.equals(getPackageName())) {
-            return;
-        }
-
         long now = System.currentTimeMillis();
-        if (pkg.equals(lastPkg) && now - lastEventAt < THROTTLE_MS) {
+        if (event.getEventType() != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                && pkg.equals(lastPkg) && now - lastEventAt < THROTTLE_MS) {
+            // Do not lose the final new-message event inside the throttle interval.
+            events.removeCallbacks(trailingCapture);
+            events.postDelayed(trailingCapture, THROTTLE_MS - (now - lastEventAt));
             return;
         }
+        events.removeCallbacks(trailingCapture);
         lastEventAt = now;
         lastPkg = pkg;
+        observeActiveWindow();
+    }
 
+    private void observeActiveWindow() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
         if (root == null) {
+            notifyActiveWindow(null);
             return;
         }
         try {
@@ -359,35 +383,19 @@ public class ChatAccessibilityService extends AccessibilityService {
             // 而 getRootInActiveWindow() 拿到的是真正的活动窗口——实测就这样把一份
             // 读对了的 QQ 群聊标成了「最近读自 com.android.systemui」。
             CharSequence rp = root.getPackageName();
-            String owner = rp == null ? pkg : rp.toString();
-            if (owner.equals(getPackageName())) {
-                return;      // 被动路径同样不抓自己的界面
+            String owner = rp == null ? "" : rp.toString();
+            if (owner.startsWith("com.android.systemui")) {
+                return; // Temporary system panels do not replace the conversation.
             }
-
-            // 活动窗口换人了就通知外面。放在抓取之前：桌面、系统面板这类窗口常常
-            // 一行文字都抓不到，但"已经离开那个聊天"这件事此刻已经成立。
-            notifyActivePackage(owner);
-
-            List<Line> lines = new ArrayList<>();
-            collect(root, lines, 0);
-            if (lines.isEmpty()) {
+            CaptureSnapshot snapshot = readSnapshot(root);
+            notifyActiveWindow(snapshot);
+            // Observe our demo/settings transitions too, but preserve the external input cache.
+            if (owner.equals(getPackageName()) || snapshot.transcript.length() == 0) {
                 return;
             }
-            DisplayMetrics dm = getResources().getDisplayMetrics();
-            String transcript = buildTranscript(lines, dm.widthPixels, realScreenHeight());
-            if (transcript.length() == 0) {
-                return;
-            }
-            cachedTranscript = transcript;
+            cachedTranscript = snapshot.transcript;
             lastCapturePkg = owner;
-            lastCaptureAt = now;
-
-            // 顺手记下每行占的纵向范围，卡片靠它避让
-            List<int[]> bands = new ArrayList<>(lines.size());
-            for (Line line : lines) {
-                bands.add(new int[]{line.top, line.bottom});
-            }
-            cachedBands = bands;
+            lastCaptureAt = snapshot.capturedAt;
         } finally {
             recycleSafely(root);
         }
@@ -395,7 +403,16 @@ public class ChatAccessibilityService extends AccessibilityService {
 
     @Override
     public void onInterrupt() {
-        // 无需处理
+        notifyActiveWindow(null);
+    }
+
+    @Override
+    public void onDestroy() {
+        events.removeCallbacksAndMessages(null);
+        instance = null;
+        cachedTranscript = "";
+        notifyActiveWindow(null);
+        super.onDestroy();
     }
 
     /** 一段可加说话人前缀的文本行。 */
@@ -419,7 +436,8 @@ public class ChatAccessibilityService extends AccessibilityService {
         }
     }
 
-    private void collect(AccessibilityNodeInfo node, List<Line> out, int depth) {
+    private void collect(AccessibilityNodeInfo node, List<Line> out, int depth,
+            List<Line> headers, int screenHeight, int screenWidth) {
         if (node == null || depth > 40 || out.size() >= MAX_NODES) {
             return;
         }
@@ -431,6 +449,18 @@ public class ChatAccessibilityService extends AccessibilityService {
         }
         if (text != null && text.length() > 0) {
             String value = text.toString().trim();
+            // Identity is collected BEFORE message filtering: QQ group names, numeric names,
+            // and titles rendered as buttons are not messages, but still identify the chat.
+            Rect bounds = new Rect();
+            node.getBoundsInScreen(bounds);
+            if (!bounds.isEmpty() && bounds.bottom <= screenHeight * 0.11
+                    // Edge controls include QQ's changing unread count on the back button.
+                    // They identify navigation state, not the current conversation.
+                    && bounds.left >= screenWidth * 0.12 && bounds.right <= screenWidth * 0.88
+                    && !node.isEditable() && !node.isPassword()
+                    && !value.matches("^\\d{1,2}:\\d{2}(:\\d{2})?$")) {
+                headers.add(new Line(value, bounds.top, bounds.bottom, bounds.left, bounds.centerX()));
+            }
             if (isMessageLike(node, value)) {
                 Rect r = new Rect();
                 node.getBoundsInScreen(r);
@@ -448,7 +478,7 @@ public class ChatAccessibilityService extends AccessibilityService {
             AccessibilityNodeInfo child = node.getChild(i);
             if (child != null) {
                 try {
-                    collect(child, out, depth + 1);
+                    collect(child, out, depth + 1, headers, screenHeight, screenWidth);
                 } finally {
                     recycleSafely(child);
                 }
@@ -555,7 +585,7 @@ public class ChatAccessibilityService extends AccessibilityService {
                 if (speakerOf.containsKey(above)) {
                     continue;
                 }
-                if (looksLikeSpeakerLabel(above, cur)) {
+                if (looksLikeSpeakerLabel(above, cur, width)) {
                     labels.add(above);
                     speakerOf.put(cur, above.text);
                     break;
@@ -596,8 +626,13 @@ public class ChatAccessibilityService extends AccessibilityService {
      * <p>其中"更矮"用的是相对比较（矮于对方的 85%）而不是绝对值，这样字号大的 App 和
      * 字号小的 App 都适用。"更窄"是额外加的一道：昵称通常也短于消息气泡。
      */
-    private boolean looksLikeSpeakerLabel(Line a, Line b) {
+    private boolean looksLikeSpeakerLabel(Line a, Line b, int width) {
         if (a.height() <= 0 || b.height() <= 0) {
+            return false;
+        }
+        // A nickname belongs to the bubble below on the same side. A short left-hand reply
+        // followed by a tall right-hand photo must remain a message, not become its nickname.
+        if (Math.abs(a.left - b.left) > width * 0.05) {
             return false;
         }
         int gap = b.top - a.bottom;

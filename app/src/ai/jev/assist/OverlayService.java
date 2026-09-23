@@ -43,6 +43,27 @@ public class OverlayService extends Service {
 
     /** 悬浮球是否在运行，供设置界面显示状态。 */
     public static volatile boolean running = false;
+    /** 最近一次悬浮球判定的轻量摘要，供主界面显示；不保存聊天全文。 */
+    private static volatile String lastDecisionHeadline = "";
+    private static volatile String lastDecisionMeta = "";
+    private static volatile String lastDecisionTranscript = "";
+    private static volatile long lastDecisionAt = 0L;
+
+    public static String lastDecisionHeadline() {
+        return lastDecisionHeadline;
+    }
+
+    public static String lastDecisionMeta() {
+        return lastDecisionMeta;
+    }
+
+    public static String lastDecisionTranscript() {
+        return lastDecisionTranscript;
+    }
+
+    public static long lastDecisionAt() {
+        return lastDecisionAt;
+    }
 
     private static final String CHANNEL_ID = "jev_assist_overlay";
     private static final int NOTIFICATION_ID = 4401;
@@ -84,6 +105,7 @@ public class OverlayService extends Service {
     private boolean dismissed = false;
     /** 请求序号，避免旧请求的结果盖掉新请求的。 */
     private int requestSeq = 0;
+    private CaptureSnapshot activeCapture;
 
     // 当前屏幕上摆着什么。悬浮球是唯一的总开关，按这个状态循环推进：
     // 无 -> 判定（卡片形态，带进度动画）-> 胶囊 -> 展开成卡片 -> 无 …
@@ -108,8 +130,8 @@ public class OverlayService extends Service {
         // 球上的判定染色要知道用户什么时候离开了那个聊天窗口
         ChatAccessibilityService.setWindowWatcher(new ChatAccessibilityService.WindowWatcher() {
             @Override
-            public void onActivePackage(String pkg) {
-                onActivePackageChanged(pkg);
+            public void onActiveWindow(CaptureSnapshot snapshot) {
+                onActiveWindowChanged(snapshot);
             }
         });
     }
@@ -123,20 +145,30 @@ public class OverlayService extends Service {
      * <p>胶囊和卡片一起收掉。球、胶囊、卡片都是关于那一个窗口的，只让球变白、把结论
      * 留在别的 App 上，等于说"这个结论还作数"——那才是自相矛盾。
      *
-     * <p>90 秒那个定时器仍然留着兜底——同一条聊天里换对话人，包名不变，这条路径看不见。
+     * <p>同一 App 内也比较窗口、标题和消息；统计始终使用请求自身的快照。
      */
-    private void onActivePackageChanged(String pkg) {
+    private void onActiveWindowChanged(CaptureSnapshot snapshot) {
         // 拉通知栏、接电话这类系统面板不算离开聊天，别把东西全抹掉
-        if (pkg.startsWith("com.android.systemui")) {
+        if (snapshot != null && snapshot.packageName.startsWith("com.android.systemui")) {
             return;
         }
-        if (pkg.equals(ChatAccessibilityService.pinnedPkg())) {
-            return;     // 还在判定过的那条聊天里
+        if (activeCapture == null || activeCapture.sameContext(snapshot)) {
+            return;
         }
+        invalidateDecision();
+        // The expanded card replaces the ball. Invalidating it must restore the entry point.
+        if (running && ballView == null) {
+            showBall();
+        }
+    }
 
+    private void invalidateDecision() {
+        activeCapture = null;
+        requestSeq++;
         clearBallTint();
         // 判定还在跑的时候切走，迟到的结果也不该再弹出来
         dismissed = true;
+        stopProgress();
         removePill();
         removeCard();
     }
@@ -169,9 +201,8 @@ public class OverlayService extends Service {
     @Override
     public void onDestroy() {
         running = false;
-        stopProgress();
-        removeCard();
-        removePill();
+        invalidateDecision();
+        ui.removeCallbacksAndMessages(null);
         removeBall();
         ChatAccessibilityService.setWindowWatcher(null);
         super.onDestroy();
@@ -511,12 +542,15 @@ public class OverlayService extends Service {
         dismissed = false;
 
         // 现抓当前窗口，不吃缓存——缓存可能还停在桌面或上一个 App 上
-        String transcript = ChatAccessibilityService.captureNow();
-        if (transcript == null) {
-            transcript = ChatAccessibilityService.cachedTranscript();
-        }
-        if (transcript == null || transcript.length() == 0) {
+        CaptureSnapshot capture = ChatAccessibilityService.captureSnapshotNow();
+        if (capture == null || capture.transcript.length() == 0) {
+            activeCapture = null;
+            requestSeq++;
             headlineText = "这个窗口读不到文字";
+            lastDecisionHeadline = headlineText;
+            lastDecisionMeta = "换到聊天窗口再点一次";
+            lastDecisionTranscript = "";
+            lastDecisionAt = System.currentTimeMillis();
             bodyText = "当前界面对无障碍没有暴露文字，或者读屏服务没在运行。"
                     + "换到聊天窗口再点一次；微信整屏都是自绘的，读不到是正常的。";
             metaText = "";
@@ -538,18 +572,24 @@ public class OverlayService extends Service {
         riskHigh = false;
         showPill(STATE_WAITING);
         startProgress();
-        ask(transcript);
+        ask(capture);
     }
 
     /** 上一次判定是否已经出过结果——决定再点球是收掉还是重新判。 */
     private boolean cardDataFromLastRun = false;
 
-    private void ask(final String transcript) {
+    private void ask(final CaptureSnapshot capture) {
+        activeCapture = capture;
+        final String transcript = capture.transcript;
         final boolean local = Prefs.isLocal(this);
         final String endpoint = Prefs.endpoint(this);
         final String model = Prefs.model(this);
         final String key = Prefs.apiKey(this);
         final int seq = ++requestSeq;
+        lastDecisionHeadline = "正在判定";
+        lastDecisionMeta = "";
+        lastDecisionTranscript = transcript;
+        lastDecisionAt = System.currentTimeMillis();
 
         new Thread(new Runnable() {
             @Override
@@ -574,6 +614,10 @@ public class OverlayService extends Service {
                                         return;
                                     }
                                     headlineText = "判定失败";
+                                    lastDecisionHeadline = headlineText;
+                                    lastDecisionMeta = "请检查端点和 API Key";
+                                    lastDecisionTranscript = transcript;
+                                    lastDecisionAt = System.currentTimeMillis();
                                     bodyText = err;
                                     metaText = "端点 " + endpoint;
                                     pillText = "判定失败";
@@ -604,7 +648,7 @@ public class OverlayService extends Service {
                             // 原始判定不再占正文，压成一行小字放在下面当依据。
                             // 依据行下面再补一行输入摘要：结论看不出读没读对，用户需要一个
                             // 能跟刚才那段聊天对上的锚点——对不上就说明这次读坏了。
-                            String reading = ChatAccessibilityService.lastReading();
+                            String reading = capture.reading;
                             metaText = DecisionSpec.evidence(answers)
                                     + (reading.length() > 0 ? " · " + reading : "");
                             pillText = headlineText;
@@ -613,12 +657,17 @@ public class OverlayService extends Service {
                             // 上下文太短时那份结论本身就不可信，标题一并换掉。胶囊是默认
                             // 形态，只在小字里提示等于没提示——用户看的就是这一行。
                             String thin = DecisionSpec.thinContextWarning(
-                                    ChatAccessibilityService.lastTranscriptLines());
+                                    capture.lineCount);
                             if (thin != null) {
                                 headlineText = thin;
                                 pillText = thin;
                                 bodyText = DecisionSpec.thinContextNote() + "\n" + bodyText;
                             }
+
+                            lastDecisionHeadline = headlineText;
+                            lastDecisionMeta = meta;
+                            lastDecisionTranscript = transcript;
+                            lastDecisionAt = System.currentTimeMillis();
 
                             retryable = true;
                             // 结论同时染到球上：球一直看得见，不用展开就知道这条要不要小心
@@ -635,6 +684,10 @@ public class OverlayService extends Service {
                                 return;
                             }
                             headlineText = "本地判定失败";
+                            lastDecisionHeadline = headlineText;
+                            lastDecisionMeta = "本地模型未能加载";
+                            lastDecisionTranscript = transcript;
+                            lastDecisionAt = System.currentTimeMillis();
                             bodyText = String.valueOf(e.getMessage());
                             confidenceText = "";
                             metaText = "本地模型未能加载，可在设置里看具体原因。";
@@ -1120,6 +1173,8 @@ public class OverlayService extends Service {
     private void removeCard() {
         stopProgress();
         if (cardView != null && windowManager != null) {
+            cardView.animate().withEndAction(null).cancel();
+            collapsing = false;
             try {
                 windowManager.removeView(cardView);
             } catch (Exception ignored) {

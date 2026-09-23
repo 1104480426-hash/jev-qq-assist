@@ -122,7 +122,10 @@ public final class LocalJudge {
 
     /** 句向量：取 [CLS] 位置，L2 归一化。 */
     private float[] embed(String text) throws Exception {
-        int[] ids = tokenizer.encode(text, MAX_LEN);
+        return embed(tokenizer.encode(text, MAX_LEN));
+    }
+
+    private float[] embed(int[] ids) throws Exception {
         int len = ids.length;
 
         long[] inputIds = new long[len];
@@ -232,10 +235,8 @@ public final class LocalJudge {
      */
     public JSONObject judge(String context) throws Exception {
         JSONObject answers = new JSONObject();
-        String trimmed = context.length() > 900 ? context.substring(context.length() - 900) : context;
-
         for (LocalDecisionSpec.Question q : LocalDecisionSpec.QUESTIONS) {
-            float[] ctxVec = embed(LocalDecisionSpec.queryText(q, trimmed));
+            float[] ctxVec = embed(tokenizer.encodeConversation(context, q.ask, MAX_LEN));
 
             float[] scores = new float[q.options.length];
             boolean missing = false;
